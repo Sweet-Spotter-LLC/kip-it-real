@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { buildUserProfile } from "@/lib/glove/profile";
-import { rankGloves } from "@/lib/glove/scoring";
+import { rankGloves, anyGloveInBudget } from "@/lib/glove/scoring";
 import { recommendSize } from "@/lib/glove/sizing";
 import { loadCatalog } from "@/lib/catalog/gloves";
 import type { QuizAnswers } from "@/lib/glove/types";
@@ -71,7 +71,13 @@ export async function POST(req: Request) {
     wantsVersatility: answers.wantsVersatility,
   });
 
-  return NextResponse.json({ results, profile, size });
+  // Flag so the results page can show a "no in-budget matches" banner.
+  // Checked against the full sport catalog, not just the top 3 — otherwise a
+  // stingy ceiling could hide the fact that cheaper options exist outside the
+  // returned top ranks.
+  const budgetMismatch = !anyGloveInBudget(profile, catalog);
+
+  return NextResponse.json({ results, profile, size, budgetMismatch });
 }
 
 /**

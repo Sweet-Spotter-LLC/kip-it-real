@@ -10,12 +10,15 @@ import type {
   SizeRecommendation,
 } from "@/lib/glove/types";
 import { POSITION_LABELS, SPORT_LABELS } from "@/lib/glove/constants";
+import { formatResultsAsText, buildMailtoUrl } from "@/lib/glove/share";
 import { GloveCard } from "./GloveCard";
 
 interface ApiResponse {
   results: GloveMatchResult[];
   profile: UserProfile;
   size: SizeRecommendation;
+  /** True when NO glove in the sport catalog sits inside the user's budget. */
+  budgetMismatch?: boolean;
 }
 
 /**
@@ -127,7 +130,7 @@ function ErrorState({ message }: { message: string }) {
 
 // ─── Ready ──────────────────────────────────────────────────────────────────
 
-function ReadyState({ results, profile, size }: ApiResponse) {
+function ReadyState({ results, profile, size, budgetMismatch }: ApiResponse) {
   if (results.length === 0) {
     return (
       <div className="card text-center">
@@ -178,15 +181,21 @@ function ReadyState({ results, profile, size }: ApiResponse) {
         </div>
       </section>
 
+      {/* ── Budget-mismatch banner ─────────────────────────────────────── */}
+      {budgetMismatch && <BudgetBanner profile={profile} />}
+
       {/* ── Top 3 ─────────────────────────────────────────────────────── */}
       <section className="flex flex-col gap-6">
-        <div className="flex items-baseline justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="font-display text-2xl md:text-3xl font-bold text-brand-primary">
             Your top {results.length}
           </h2>
-          <Link href="/quiz" className="btn-ghost">
-            Retake quiz →
-          </Link>
+          <div className="flex flex-wrap items-center gap-2">
+            <ShareActions results={results} profile={profile} />
+            <Link href="/quiz" className="btn-ghost">
+              Retake quiz →
+            </Link>
+          </div>
         </div>
         <div className="flex flex-col gap-6">
           {results.map((match, i) => (
@@ -194,6 +203,92 @@ function ReadyState({ results, profile, size }: ApiResponse) {
           ))}
         </div>
       </section>
+    </div>
+  );
+}
+
+// ─── Budget-mismatch banner ─────────────────────────────────────────────────
+
+function BudgetBanner({ profile }: { profile: UserProfile }) {
+  return (
+    <section
+      role="status"
+      aria-live="polite"
+      className="rounded-2xl border border-brand-accent/40 bg-brand-accent/10 p-5 md:p-6"
+    >
+      <p className="eyebrow text-brand-primary">Heads up on budget</p>
+      <p className="mt-2 text-sm md:text-base leading-relaxed text-brand-text">
+        Nothing in the catalog lands inside your ${profile.budgetMin}–$
+        {profile.budgetMax} window right now, but here are the closest overall
+        matches. Budget is weighed as a soft signal — these scored highest on
+        fit, position, and the rest of your profile.
+      </p>
+    </section>
+  );
+}
+
+// ─── Share actions (Copy + Email) ───────────────────────────────────────────
+
+function ShareActions({
+  results,
+  profile,
+}: {
+  results: GloveMatchResult[];
+  profile: UserProfile;
+}) {
+  const [status, setStatus] = useState<"idle" | "copied" | "error">("idle");
+
+  const origin =
+    typeof window !== "undefined" ? window.location.origin : undefined;
+  const payload = { results, profile, origin };
+
+  async function handleCopy() {
+    const text = formatResultsAsText(payload);
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        // Older browsers fallback.
+        const ta = document.createElement("textarea");
+        ta.value = text;
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand("copy");
+        document.body.removeChild(ta);
+      }
+      setStatus("copied");
+      setTimeout(() => setStatus("idle"), 2000);
+    } catch {
+      setStatus("error");
+      setTimeout(() => setStatus("idle"), 2500);
+    }
+  }
+
+  const mailto = buildMailtoUrl(payload);
+
+  return (
+    <div className="flex items-center gap-2" aria-live="polite">
+      <button
+        type="button"
+        onClick={handleCopy}
+        className="btn-secondary text-sm"
+        aria-label="Copy results to clipboard"
+      >
+        {status === "copied"
+          ? "Copied ✓"
+          : status === "error"
+          ? "Copy failed"
+          : "Copy results"}
+      </button>
+      <a
+        href={mailto}
+        className="btn-secondary text-sm"
+        aria-label="Email results"
+      >
+        Email results
+      </a>
     </div>
   );
 }

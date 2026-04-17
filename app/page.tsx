@@ -34,7 +34,10 @@ export default function HomePage() {
             <Link href="/quiz" className="btn-primary text-base md:text-lg">
               Start the quiz
             </Link>
-            <Link href="#how-it-works" className="btn-secondary">
+            <Link href="/browse" className="btn-secondary">
+              Browse the catalog
+            </Link>
+            <Link href="#how-it-works" className="btn-ghost">
               How it works
             </Link>
           </div>

@@ -159,16 +159,43 @@ function scoreWebFit(profile: UserProfile, glove: GloveProduct): number {
 }
 
 /**
- * Budget fit: full score if at or below budget max.
- * Graceful degradation up to 20 % over, then steep drop.
+ * Budget fit: soft scoring around the user's selected range.
+ *
+ * Behaviour (matches BUDGET_SOFT_FILTER spec in types.ts):
+ *   - Inside [budgetMin, budgetMax]         → 1.0                 (strong)
+ *   - Slightly above budgetMax (≤ 15 %)     → 0.85 → 0.75         (modest penalty)
+ *   - Further above (15–50 %)               → 0.75 → 0.30         (larger penalty)
+ *   - Far above (> 50 %)                    → 0.30 → 0.05         (heavy penalty)
+ *   - Slightly below budgetMin (within 40%) → 0.90                (acceptable)
+ *   - Very far below budgetMin              → 0.70                (neutral, not a win)
+ *
+ * This NEVER returns 0 — budget is a soft signal, not a rejection. Gloves stay
+ * ranked by everything else when no in-budget option exists.
  */
-function scoreBudgetFit(profile: UserProfile, glove: GloveProduct): number {
-  const { budgetMax } = profile;
-  if (glove.price <= budgetMax) return 1.0;
+export function scoreBudgetFit(profile: UserProfile, glove: GloveProduct): number {
+  const { budgetMin, budgetMax } = profile;
+  const price = glove.price;
 
-  const overage = glove.price - budgetMax;
-  const softCap = budgetMax * 0.2; // 20 % tolerance
-  return clamp(1 - overage / softCap, 0, 1);
+  // Within range → perfect fit.
+  if (price >= budgetMin && price <= budgetMax) return 1.0;
+
+  // Above the ceiling.
+  if (price > budgetMax) {
+    const ratio = (price - budgetMax) / Math.max(budgetMax, 1);
+    if (ratio <= 0.15) return clamp(0.85 - (ratio / 0.15) * 0.1, 0.75, 0.85);
+    if (ratio <= 0.5) return clamp(0.75 - ((ratio - 0.15) / 0.35) * 0.45, 0.3, 0.75);
+    return clamp(0.3 - Math.min(ratio - 0.5, 1) * 0.25, 0.05, 0.3);
+  }
+
+  // Below the floor (only meaningful when floor > 0).
+  if (budgetMin > 0) {
+    const shortfall = (budgetMin - price) / budgetMin;
+    if (shortfall <= 0.4) return 0.9;
+    return 0.7; // very cheap for the chosen bracket — not auto-elevated
+  }
+
+  // budgetMin is 0 — price below budgetMax is always fine.
+  return 1.0;
 }
 
 /**
@@ -231,7 +258,10 @@ function softPenalty(profile: UserProfile, glove: GloveProduct): number {
   const flags = softFilter(profile, glove);
   let penalty = 0;
 
-  if (flags.overBudget) penalty += 0.10;
+  // NOTE: overBudget is intentionally NOT applied here — budget is handled
+  // by scoreBudgetFit() as a graduated soft score. Double-penalising would
+  // push above-budget gloves too far down when they're the only reasonable
+  // fit (e.g. user's whole catalog is above their selected ceiling).
   if (flags.fastpitchFitMismatch) penalty += 0.08;
   if (flags.slowpitchMismatch) penalty += 0.06;
   if (flags.youthMismatch) penalty += 0.07;
@@ -318,6 +348,34 @@ export function scoreGlove(
   };
 }
 
+/**
+ * Absolute distance from `glove.price` to the user's budget range.
+ * Zero when the price is inside [budgetMin, budgetMax]. Exported for ranking
+ * tie-breakers and for the "closest-to-budget" result ordering.
+ */
+export function budgetDistance(
+  profile: UserProfile,
+  glove: GloveProduct,
+): number {
+  const { budgetMin, budgetMax } = profile;
+  if (glove.price < budgetMin) return budgetMin - glove.price;
+  if (glove.price > budgetMax) return glove.price - budgetMax;
+  return 0;
+}
+
+/**
+ * Convenience: does at least one glove fall inside the profile's budget range?
+ * Used by the API / UI to display a "no in-budget matches" banner.
+ */
+export function anyGloveInBudget(
+  profile: UserProfile,
+  gloves: GloveProduct[],
+): boolean {
+  return gloves.some(
+    (g) => g.price >= profile.budgetMin && g.price <= profile.budgetMax,
+  );
+}
+
 // ─── Ranker ───────────────────────────────────────────────────────────────────
 
 /**
@@ -372,7 +430,12 @@ export function rankGloves(
 
   const scored = eligible.map((glove) => scoreGlove(profile, glove, weights));
 
-  scored.sort((a, b) => b.score - a.score);
+  scored.sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score;
+    // Tie-breaker: prefer the glove closest to the user's budget range.
+    // This pulls nearest-priced gloves up when everything else is equal.
+    return budgetDistance(profile, a.glove) - budgetDistance(profile, b.glove);
+  });
 
   const top = scored.slice(0, topN);
 

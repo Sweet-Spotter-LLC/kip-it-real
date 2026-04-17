@@ -42,10 +42,16 @@ export function Header() {
         {/* Nav ------------------------------------------------------------- */}
         <nav className="flex items-center gap-2 md:gap-4">
           <Link
-            href="/"
+            href="/browse"
             className="hidden md:inline-flex btn-ghost"
           >
-            Home
+            Browse
+          </Link>
+          <Link
+            href="/contact"
+            className="hidden md:inline-flex btn-ghost"
+          >
+            Contact
           </Link>
           <Link
             href="/quiz"

@@ -57,6 +57,22 @@ export function Footer() {
                     Find my glove
                   </Link>
                 </li>
+                <li>
+                  <Link
+                    href="/browse"
+                    className="text-brand-text hover:text-brand-primary transition-colors"
+                  >
+                    Browse gloves
+                  </Link>
+                </li>
+                <li>
+                  <Link
+                    href="/contact"
+                    className="text-brand-text hover:text-brand-primary transition-colors"
+                  >
+                    Contact
+                  </Link>
+                </li>
               </ul>
             </div>
             <div>

@@ -18,6 +18,7 @@ node_modules/
 # TypeScript build info
 *.tsbuildinfo
 next-env.d.ts
+tsconfig.check.json
 
 # OS / editor noise
 .DS_Store
