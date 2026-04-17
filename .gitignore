@@ -1,0 +1,38 @@
+# Next.js build output
+.next/
+out/
+
+# Dependencies
+node_modules/
+
+# Environment files — never commit secrets
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Vercel
+.vercel
+
+# TypeScript build info
+*.tsbuildinfo
+next-env.d.ts
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
+
+# Test coverage
+coverage/
+
+# Debug logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Excel working files (keep the final VALIDATED copy if you want it tracked)
+Glove_CatalogV1_MasterTable_final_copy_updated.xlsx
