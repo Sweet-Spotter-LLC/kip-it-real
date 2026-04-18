@@ -37,3 +37,10 @@ yarn-error.log*
 
 # Excel working files (keep the final VALIDATED copy if you want it tracked)
 Glove_CatalogV1_MasterTable_final_copy_updated.xlsx
+
+# Catalog working files
+Glove_CatalogV1_*.xlsx
+_glove-catalog-updates/
+catalog_price_refresh/
+catalog_validation_report*.csv
+
