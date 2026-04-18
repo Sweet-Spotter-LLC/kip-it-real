@@ -21,6 +21,15 @@ import { recommendSize } from "./sizing";
 const DEFAULT_BUDGET_MIN = 0;
 const DEFAULT_BUDGET_MAX = 400;
 
+/**
+ * "Maximum" budget sentinel used when the Kip it Real premium path is
+ * selected (wantsPremiumLeather = true + budgetSkipped = true). Big enough
+ * that every real-world glove price is below it, which keeps the
+ * downstream budget-fit scorer in its "inside range" (1.0) branch without
+ * needing Infinity in the arithmetic.
+ */
+export const PREMIUM_PATH_BUDGET_CEILING = 10_000;
+
 /** Positions that require dedicated mitt geometry. */
 function gloveTypeForPosition(pos: PositionType): GloveType {
   if (pos === "catcher") return "catcher";
@@ -104,10 +113,23 @@ export function buildUserProfile(answers: QuizAnswers): UserProfile {
     wantsVersatility: answers.wantsVersatility,
   });
 
-  const budgetMin =
-    answers.budgetMin !== undefined ? answers.budgetMin : DEFAULT_BUDGET_MIN;
-  const budgetMax =
-    answers.budgetMax !== undefined ? answers.budgetMax : DEFAULT_BUDGET_MAX;
+  // Budget handling:
+  //   - Kip it Real premium path: the user explicitly skipped budget, so we
+  //     treat it as "no ceiling" via a large sentinel. Scoring stays happy
+  //     and the budget-mismatch banner never fires.
+  //   - Otherwise, use the provided budget or fall back to safe defaults.
+  const tookPremiumPath =
+    answers.wantsPremiumLeather === true && answers.budgetSkipped === true;
+  const budgetMin = tookPremiumPath
+    ? DEFAULT_BUDGET_MIN
+    : answers.budgetMin !== undefined
+    ? answers.budgetMin
+    : DEFAULT_BUDGET_MIN;
+  const budgetMax = tookPremiumPath
+    ? PREMIUM_PATH_BUDGET_CEILING
+    : answers.budgetMax !== undefined
+    ? answers.budgetMax
+    : DEFAULT_BUDGET_MAX;
 
   // Brand filter is intentionally undefined when the user leaves the picker
   // empty — that represents "open to any brand" and avoids false-negative

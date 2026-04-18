@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { GloveMatchResult } from "@/lib/glove/types";
 import { POSITION_LABELS, WEB_TYPE_META } from "@/lib/glove/constants";
+import { qualitativeFor } from "@/lib/glove/qualitative";
 
 interface GloveCardProps {
   match: GloveMatchResult;
@@ -22,6 +23,11 @@ interface GloveCardProps {
 export function GloveCard({ match, rank }: GloveCardProps) {
   const { glove, score, reasons, tradeoffs, avoidIf } = match;
   const webMeta = WEB_TYPE_META[glove.webType];
+  const qualitative = qualitativeFor({
+    leatherQuality: glove.leatherQuality,
+    breakInTime: glove.breakInTime,
+    fitProfile: glove.fitProfile,
+  });
 
   return (
     <article className="card relative flex flex-col gap-6">
@@ -63,22 +69,18 @@ export function GloveCard({ match, rank }: GloveCardProps) {
       </div>
 
       {/* ── Attribute badges ───────────────────────────────────────── */}
+      {/* Qualitative descriptors replace the raw 0-5 numeric ratings —
+          player-facing language (Elite / Game Ready / Standard etc.) is
+          easier to compare across gloves than a score. */}
       <div className="flex flex-wrap gap-2">
         {glove.positionTags.map((p) => (
           <span key={p} className="chip">
             {POSITION_LABELS[p] ?? p}
           </span>
         ))}
-        <span className="chip">
-          Leather {glove.leatherQuality}/5
-        </span>
-        <span className="chip">
-          Break-in {glove.breakInTime}/5
-        </span>
-        <span className="chip">
-          Fit {glove.fitProfile > 0 ? "+" : ""}
-          {glove.fitProfile}
-        </span>
+        <span className="chip">Leather · {qualitative.leather}</span>
+        <span className="chip">Break-in · {qualitative.breakIn}</span>
+        <span className="chip">Fit · {qualitative.fit}</span>
       </div>
 
       {/* ── Explanation blocks ─────────────────────────────────────── */}

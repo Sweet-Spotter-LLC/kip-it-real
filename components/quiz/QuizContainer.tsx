@@ -5,8 +5,13 @@ import { useRouter } from "next/navigation";
 import {
   QUIZ_QUESTIONS,
   getVisibleQuestions,
+  resolveQuestionOptions,
 } from "@/lib/glove/questions";
-import type { QuizAnswers, QuizQuestion } from "@/lib/glove/types";
+import type {
+  QuizAnswers,
+  QuizQuestion,
+  QuizQuestionOption,
+} from "@/lib/glove/types";
 import { ProgressBar } from "./ProgressBar";
 
 /**
@@ -22,6 +27,9 @@ import { ProgressBar } from "./ProgressBar";
  *      primary button since they may want to add or clear selections.
  *   5. On the final step, answers are stored in sessionStorage and we
  *      navigate to /results, which reads them back and calls /api/gloves.
+ *   6. The Kip It Real? fork: selecting "Yes" drops the budget question
+ *      out of the visible list (via its showIf) and auto-submits the quiz
+ *      since that question is then the final one.
  */
 export function QuizContainer() {
   const router = useRouter();
@@ -46,12 +54,39 @@ export function QuizContainer() {
   const totalSteps = visibleQuestions.length || QUIZ_QUESTIONS.length;
   const current = visibleQuestions[stepIndex];
 
+  // Dynamic options (e.g. position-filtered web choices) are resolved here
+  // so the input renderer stays dumb — it just renders what it's given.
+  const currentOptions: QuizQuestionOption[] | undefined = useMemo(
+    () => (current ? resolveQuestionOptions(current, answers) : undefined),
+    [current, answers],
+  );
+
   // ── Answer setter ────────────────────────────────────────────────────────
   function setAnswer(key: keyof QuizAnswers, value: unknown) {
     // Any new selection clears the back-suppression — selecting an answer is
     // an intentional forward action.
     suppressAdvanceRef.current = false;
-    setAnswers((prev) => ({ ...prev, [key]: value }));
+
+    setAnswers((prev) => {
+      const next: Partial<QuizAnswers> = { ...prev, [key]: value } as Partial<QuizAnswers>;
+
+      // Kip it Real? fork — flipping this answer carries a side effect on
+      // the budget fields. Yes => skip budget; No => clear the skip flag so
+      // the budget question re-appears with a clean slate.
+      if (key === "wantsPremiumLeather") {
+        if (value === true) {
+          next.budgetSkipped = true;
+          // Drop any prior budget so the profile builder uses the
+          // premium-path sentinel instead of a stale selection.
+          delete next.budgetMin;
+          delete next.budgetMax;
+        } else {
+          next.budgetSkipped = false;
+        }
+      }
+
+      return next;
+    });
   }
 
   // ── Navigation ──────────────────────────────────────────────────────────
@@ -60,12 +95,13 @@ export function QuizContainer() {
     setStepIndex((i) => Math.max(0, i - 1));
   }
 
-  async function submitAnswers() {
+  async function submitAnswers(overrides?: Partial<QuizAnswers>) {
     setSubmitting(true);
     try {
+      const payload = overrides ? { ...answers, ...overrides } : answers;
       sessionStorage.setItem(
         "kip-quiz-answers",
-        JSON.stringify(answers),
+        JSON.stringify(payload),
       );
       router.push("/results");
     } catch (err) {
@@ -104,6 +140,22 @@ export function QuizContainer() {
     if (lastAdvancedKeyRef.current === advanceKey) return;
     lastAdvancedKeyRef.current = advanceKey;
 
+    // ── Kip it Real? premium path: auto-submit on Yes ─────────────────────
+    // When the user picks Yes, the budget question drops out of
+    // visibleQuestions (via its showIf), making this question the last one.
+    // The spec says: "Proceed directly to the Results page" — we honour
+    // that by submitting instead of waiting for another tap.
+    if (
+      current.id === "wantsPremiumLeather" &&
+      answerForCurrent === true &&
+      stepIndex === visibleQuestions.length - 1
+    ) {
+      const timer = setTimeout(() => {
+        submitAnswers();
+      }, 420);
+      return () => clearTimeout(timer);
+    }
+
     // If we're on the last step, don't auto-submit. Let the user tap the
     // confirm CTA intentionally.
     if (stepIndex >= visibleQuestions.length - 1) return;
@@ -116,6 +168,8 @@ export function QuizContainer() {
     }, 280);
 
     return () => clearTimeout(timer);
+    // submitAnswers depends on `answers` so the effect deps already cover it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [answers, current, stepIndex, visibleQuestions]);
 
   // ── Guard — no question (shouldn't happen, but defensive) ───────────────
@@ -129,9 +183,17 @@ export function QuizContainer() {
     );
   }
 
-  const hasAnswer = answers[current.id as keyof QuizAnswers] !== undefined;
+  const currentAnswer = answers[current.id as keyof QuizAnswers];
+  const hasAnswer = currentAnswer !== undefined;
   const isLast = stepIndex === visibleQuestions.length - 1;
   const isMultiSelect = current.type === "brand_picker";
+
+  // Premium-path: when Yes is picked we suppress the manual "Show my matches"
+  // button since we auto-submit. When No is picked we show a reassurance
+  // note explaining that the budget question is still coming.
+  const isKipItRealQuestion = current.id === "wantsPremiumLeather";
+  const kipItRealYes = isKipItRealQuestion && currentAnswer === true;
+  const kipItRealNo = isKipItRealQuestion && currentAnswer === false;
 
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-8">
@@ -148,30 +210,58 @@ export function QuizContainer() {
           </p>
         )}
 
+        {/* Warning callout — used by the Kip it Real? fork and any future
+            high-stakes questions that need an explicit disclaimer. */}
+        {current.warning && (
+          <div
+            role="note"
+            className="mt-4 rounded-2xl border border-brand-accent/40 bg-brand-accent/10 p-4 text-sm leading-relaxed text-brand-text"
+          >
+            {current.warning}
+          </div>
+        )}
+
         <div className="mt-8">
           <QuestionInput
             question={current}
-            value={answers[current.id as keyof QuizAnswers]}
+            options={currentOptions}
+            value={currentAnswer}
             onChange={(v) => setAnswer(current.id as keyof QuizAnswers, v)}
           />
         </div>
+
+        {/* Kip it Real? No-path reassurance — spec copy verbatim. */}
+        {kipItRealNo && (
+          <p className="mt-5 text-sm leading-relaxed text-brand-support">
+            No problem. We&rsquo;ll find the best-performing matches within
+            your specific budget in the next step.
+          </p>
+        )}
+
+        {/* Kip it Real? Yes-path confirmation — explains the auto-submit. */}
+        {kipItRealYes && (
+          <p className="mt-5 text-sm leading-relaxed text-brand-primary font-semibold">
+            Locking in the premium path — optimizing for elite leather…
+          </p>
+        )}
       </div>
 
       {/* ── Nav buttons ─────────────────────────────────────────────────
           We always show Back. The primary CTA only shows on the last step
           OR on multi-select steps (brand picker) where the user must
-          confirm their selection.                                         */}
+          confirm their selection. When Kip it Real = Yes we suppress the
+          CTA entirely since the auto-submit is already in flight.          */}
       <div className="flex items-center justify-between gap-4">
         <button
           type="button"
           onClick={goBack}
-          disabled={stepIndex === 0}
+          disabled={stepIndex === 0 || submitting}
           className="btn-ghost disabled:opacity-40 disabled:cursor-not-allowed"
         >
           ← Back
         </button>
 
-        {(isLast || isMultiSelect) && (
+        {!kipItRealYes && (isLast || isMultiSelect) && (
           <button
             type="button"
             onClick={() => {
@@ -193,10 +283,16 @@ export function QuizContainer() {
         )}
 
         {/* On non-last single-choice steps, show a subtle "auto-advancing"
-            hint so the user isn't confused by the missing Next button. */}
-        {!isLast && !isMultiSelect && (
+            hint so the user isn't confused by the missing Next button.
+            Also used during the Kip it Real auto-submit delay.            */}
+        {(!isLast && !isMultiSelect) && (
           <span className="text-xs text-brand-support">
             {hasAnswer ? "Advancing…" : "Select to continue"}
+          </span>
+        )}
+        {kipItRealYes && (
+          <span className="text-xs font-semibold text-brand-primary">
+            Showing your matches…
           </span>
         )}
       </div>
@@ -208,17 +304,30 @@ export function QuizContainer() {
 
 interface QuestionInputProps {
   question: QuizQuestion;
+  /**
+   * Options to render — resolved by the container so dynamic
+   * (position-filtered) questions work correctly. Falls back to
+   * question.options when undefined.
+   */
+  options?: QuizQuestionOption[];
   value: unknown;
   onChange: (v: unknown) => void;
 }
 
-function QuestionInput({ question, value, onChange }: QuestionInputProps) {
+function QuestionInput({
+  question,
+  options,
+  value,
+  onChange,
+}: QuestionInputProps) {
+  const opts = options ?? question.options ?? [];
+
   // Brand picker = multi-select chips
   if (question.type === "brand_picker") {
     const selected = Array.isArray(value) ? (value as string[]) : [];
     return (
       <div className="flex flex-wrap gap-2">
-        {question.options?.map((opt) => {
+        {opts.map((opt) => {
           const isSelected = selected.includes(opt.value as string);
           return (
             <button
@@ -286,7 +395,7 @@ function QuestionInput({ question, value, onChange }: QuestionInputProps) {
   // single_select and range both render as a list of radio-style cards.
   return (
     <div className="flex flex-col gap-3">
-      {question.options?.map((opt) => {
+      {opts.map((opt) => {
         const isSelected = value === opt.value;
         return (
           <button

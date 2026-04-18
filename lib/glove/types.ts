@@ -69,8 +69,15 @@ export interface QuizAnswers {
   webPreference?: WebPreference;
   budgetMin?: number;
   budgetMax?: number;
+  /**
+   * True when the user took the Kip It Real premium path and skipped
+   * the budget question. Profile builder treats this as "no ceiling".
+   */
+  budgetSkipped?: boolean;
   preferredBrands?: string[];
+  /** Only asked for infield / utility — suppressed for other positions. */
   wantsFastClose?: boolean;
+  /** The "Kip it Real?" fork-in-the-road — true locks in premium path. */
   wantsPremiumLeather?: boolean;
   wantsVersatility?: boolean;
   fastpitchFitImportant?: boolean;
@@ -185,8 +192,23 @@ export interface QuizQuestion {
   step: number;
   label: string;
   description?: string;
+  /**
+   * Optional longer-form disclaimer rendered as a callout (e.g. the
+   * Kip It Real premium-path warning). Kept separate from description
+   * so it can be styled as a warning rather than supporting copy.
+   */
+  warning?: string;
   type: "single_select" | "multi_select" | "range" | "boolean" | "brand_picker";
   options?: QuizQuestionOption[];
+  /**
+   * Optional dynamic options resolver. Used by questions whose choices
+   * depend on prior answers (e.g. web-style options filtered by the
+   * user's selected position). Returns undefined to fall back to
+   * the static `options` array.
+   */
+  getOptions?: (
+    answers: Partial<QuizAnswers>,
+  ) => QuizQuestionOption[] | undefined;
   /** Gate for conditional display based on prior answers */
   showIf?: (answers: Partial<QuizAnswers>) => boolean;
   /** Optional default if the user skips */

@@ -86,6 +86,19 @@ export interface WebTypeMeta {
   description: string;
 }
 
+/**
+ * Which web types are reasonable for a given position. Order is chosen
+ * to surface the most common first in position-filtered pickers.
+ */
+export const WEBS_BY_POSITION: Record<PositionType, WebPreference[]> = {
+  infield: ["i_web", "h_web", "basket", "two_piece_closed", "modified_trap"],
+  outfield: ["trap", "modified_trap", "h_web", "basket"],
+  pitcher: ["closed", "two_piece_closed", "basket", "i_web"],
+  catcher: ["closed"],
+  first_base: ["single_post"],
+  utility: ["h_web", "modified_trap", "basket", "i_web", "trap"],
+};
+
 export const WEB_TYPE_META: Record<WebPreference, WebTypeMeta> = {
   i_web: {
     label: "I-Web",
