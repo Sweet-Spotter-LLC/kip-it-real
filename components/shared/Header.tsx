@@ -40,22 +40,25 @@ export function Header() {
         </Link>
 
         {/* Nav ------------------------------------------------------------- */}
-        <nav className="flex items-center gap-2 md:gap-4">
+        {/* On mobile we use compact text links so Browse + Contact are always
+            reachable without a burger menu. The primary CTA remains the most
+            prominent element on every breakpoint.                             */}
+        <nav className="flex items-center gap-1 sm:gap-2 md:gap-4">
           <Link
             href="/browse"
-            className="hidden md:inline-flex btn-ghost"
+            className="inline-flex items-center rounded-lg px-2 py-2 text-sm font-semibold text-brand-primary hover:text-brand-accent transition-colors sm:px-3 md:text-base"
           >
             Browse
           </Link>
           <Link
             href="/contact"
-            className="hidden md:inline-flex btn-ghost"
+            className="inline-flex items-center rounded-lg px-2 py-2 text-sm font-semibold text-brand-primary hover:text-brand-accent transition-colors sm:px-3 md:text-base"
           >
             Contact
           </Link>
           <Link
             href="/quiz"
-            className="btn-primary text-sm py-2 px-4 md:text-base md:py-3 md:px-6"
+            className="btn-primary text-sm py-2 px-3 md:text-base md:py-3 md:px-6"
           >
             Start quiz
           </Link>

@@ -1,7 +1,15 @@
 import { describe, it, expect } from "vitest";
-import { formatResultsAsText, buildMailtoUrl } from "@/lib/glove/share";
+import {
+  formatResultsAsText,
+  buildMailtoUrl,
+  encodeQuizAnswers,
+  decodeQuizAnswers,
+  buildShareUrl,
+  SHARE_QUERY_PARAM,
+} from "@/lib/glove/share";
 import type { GloveMatchResult } from "@/lib/glove/types";
 import {
+  ADULT_BASEBALL_INFIELD_ANSWERS,
   ADULT_INFIELD_BASEBALL_PROFILE,
   BASEBALL_INFIELD_GLOVE,
   BASEBALL_OUTFIELD_GLOVE,
@@ -109,5 +117,67 @@ describe("buildMailtoUrl", () => {
       "friend@example.com",
     );
     expect(url.startsWith("mailto:friend@example.com?")).toBe(true);
+  });
+});
+
+describe("encodeQuizAnswers / decodeQuizAnswers", () => {
+  it("round-trips a full QuizAnswers object", () => {
+    const token = encodeQuizAnswers(ADULT_BASEBALL_INFIELD_ANSWERS);
+    expect(typeof token).toBe("string");
+    expect(token.length).toBeGreaterThan(0);
+    // URL-safe: no +, /, or = characters.
+    expect(token).not.toMatch(/[+/=]/);
+
+    const decoded = decodeQuizAnswers(token);
+    expect(decoded).toEqual(ADULT_BASEBALL_INFIELD_ANSWERS);
+  });
+
+  it("returns null for a malformed token rather than throwing", () => {
+    expect(decodeQuizAnswers("not-a-real-token!!!")).toBeNull();
+  });
+
+  it("returns null for an empty token", () => {
+    expect(decodeQuizAnswers("")).toBeNull();
+  });
+
+  it("preserves unicode and special characters", () => {
+    const answers = {
+      ...ADULT_BASEBALL_INFIELD_ANSWERS,
+      preferredBrands: ["Rawlings™", "Wilson"],
+    };
+    const decoded = decodeQuizAnswers(encodeQuizAnswers(answers));
+    expect(decoded).toEqual(answers);
+  });
+});
+
+describe("buildShareUrl", () => {
+  it("produces an absolute /results URL with the token in the query param", () => {
+    const url = buildShareUrl(
+      "https://kip-it-real.vercel.app",
+      ADULT_BASEBALL_INFIELD_ANSWERS,
+    );
+    expect(url.startsWith("https://kip-it-real.vercel.app/results?")).toBe(true);
+    expect(url).toContain(`${SHARE_QUERY_PARAM}=`);
+  });
+
+  it("normalises trailing slashes on the origin", () => {
+    const a = buildShareUrl(
+      "https://kip-it-real.vercel.app/",
+      ADULT_BASEBALL_INFIELD_ANSWERS,
+    );
+    const b = buildShareUrl(
+      "https://kip-it-real.vercel.app",
+      ADULT_BASEBALL_INFIELD_ANSWERS,
+    );
+    expect(a).toBe(b);
+  });
+
+  it("produces a URL whose token round-trips back to the same answers", () => {
+    const url = buildShareUrl(
+      "https://kip-it-real.vercel.app",
+      ADULT_BASEBALL_INFIELD_ANSWERS,
+    );
+    const token = new URL(url).searchParams.get(SHARE_QUERY_PARAM)!;
+    expect(decodeQuizAnswers(token)).toEqual(ADULT_BASEBALL_INFIELD_ANSWERS);
   });
 });

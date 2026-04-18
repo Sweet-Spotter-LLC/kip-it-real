@@ -154,4 +154,69 @@ describe("generateExplanation", () => {
       expect(s.trim().length).toBeGreaterThan(0);
     }
   });
+
+  // ── Price-gap solutioning (tradeoffs) ────────────────────────────────────
+
+  it("small price gap suggests sales or last year's colorway", () => {
+    // budgetMax 220, glove price 249 → 13% over (small).
+    const p = { ...ADULT_INFIELD_BASEBALL_PROFILE, budgetMax: 220, budgetMin: 150 };
+    const g = { ...BASEBALL_INFIELD_GLOVE, price: 249 };
+    const { tradeoffs } = explainFor(p, g);
+    const combined = tradeoffs.join(" ").toLowerCase();
+    expect(combined).toMatch(/sale|last year|colorway/);
+  });
+
+  it("medium price gap references amortisation or secondhand market", () => {
+    // budgetMax 200, price 270 → 35% over (medium).
+    const p = { ...ADULT_INFIELD_BASEBALL_PROFILE, budgetMax: 200, budgetMin: 100 };
+    const g = { ...BASEBALL_INFIELD_GLOVE, price: 270 };
+    const { tradeoffs } = explainFor(p, g);
+    const combined = tradeoffs.join(" ").toLowerCase();
+    expect(combined).toMatch(/season|sidelineswap|lightly-used|per-season/);
+  });
+
+  it("large price gap points at the pre-owned or mid-grade alternative", () => {
+    // budgetMax 100, price 300 → 200% over (large).
+    const p = { ...ADULT_INFIELD_BASEBALL_PROFILE, budgetMax: 100, budgetMin: 0 };
+    const g = { ...BASEBALL_INFIELD_GLOVE, price: 300 };
+    const { tradeoffs } = explainFor(p, g);
+    const combined = tradeoffs.join(" ").toLowerCase();
+    expect(combined).toMatch(/pre-owned|mid-grade|used/);
+  });
+
+  it("does not fire a price tradeoff when the glove is within budget", () => {
+    const p = { ...ADULT_INFIELD_BASEBALL_PROFILE, budgetMax: 500 };
+    const g = { ...BASEBALL_INFIELD_GLOVE, price: 250 };
+    const { tradeoffs } = explainFor(p, g);
+    for (const t of tradeoffs) {
+      expect(t.toLowerCase()).not.toMatch(/above your \$|past your \$|over your \$/);
+    }
+  });
+
+  // ── Avoid-if: budget strict + quality mismatch ───────────────────────────
+
+  it("surfaces a budget-strict avoidIf for casual players far over budget", () => {
+    const p = {
+      ...ADULT_INFIELD_BASEBALL_PROFILE,
+      playFrequency: "casual" as const,
+      budgetMax: 100,
+      budgetMin: 0,
+    };
+    const g = { ...BASEBALL_INFIELD_GLOVE, price: 300 }; // large gap
+    const { avoidIf } = explainFor(p, g);
+    const combined = avoidIf.join(" ").toLowerCase();
+    expect(combined).toMatch(/hard ceiling|tier below/);
+  });
+
+  it("surfaces a quality-mismatch avoidIf when casual player gets pro-grade leather", () => {
+    const p = {
+      ...ADULT_INFIELD_BASEBALL_PROFILE,
+      playFrequency: "casual" as const,
+      budgetMax: 500, // keep it in-budget so only quality mismatch fires
+    };
+    const g = { ...BASEBALL_INFIELD_GLOVE, leatherQuality: 5 as const, price: 300 };
+    const { avoidIf } = explainFor(p, g);
+    const combined = avoidIf.join(" ").toLowerCase();
+    expect(combined).toMatch(/pro-grade|overkill|casually/);
+  });
 });

@@ -7,8 +7,77 @@
  * same wording.
  */
 
-import type { GloveMatchResult, UserProfile } from "./types";
+import type { GloveMatchResult, QuizAnswers, UserProfile } from "./types";
 import { POSITION_LABELS, SPORT_LABELS } from "./constants";
+
+// ─── Shareable-link encoding ─────────────────────────────────────────────────
+//
+// A /results link with `?a=<base64>` is enough to reconstruct the exact quiz
+// the user took, so we can share recommendations without relying on
+// sessionStorage (which is private to the tab that generated it). The encoded
+// string is URL-safe base64 of the JSON-stringified QuizAnswers.
+//
+// We intentionally keep this as a thin wrapper rather than JWT/ksuid/etc.:
+//   - The payload is not sensitive — it's just quiz answers.
+//   - We want the link to keep working even if the server restarts or the
+//     data layer migrates; no DB lookup required.
+//   - Length is well under the ~2000-char safe URL budget for all realistic
+//     QuizAnswers shapes.
+export const SHARE_QUERY_PARAM = "a";
+
+function toUrlSafeBase64(b64: string): string {
+  return b64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+function fromUrlSafeBase64(s: string): string {
+  const padded = s.replace(/-/g, "+").replace(/_/g, "/");
+  const padLen = (4 - (padded.length % 4)) % 4;
+  return padded + "=".repeat(padLen);
+}
+
+/**
+ * Encode a QuizAnswers object as a URL-safe base64 string.
+ * Works in both Node (Buffer) and the browser (btoa) environments.
+ */
+export function encodeQuizAnswers(answers: QuizAnswers): string {
+  const json = JSON.stringify(answers);
+  if (typeof Buffer !== "undefined") {
+    return toUrlSafeBase64(Buffer.from(json, "utf8").toString("base64"));
+  }
+  // Browser path — btoa only accepts latin-1, so round-trip through encodeURIComponent.
+  const latin1 = unescape(encodeURIComponent(json));
+  return toUrlSafeBase64(btoa(latin1));
+}
+
+/**
+ * Decode a base64 share-token back into QuizAnswers.
+ * Returns null if the token is malformed rather than throwing — callers can
+ * fall back to sessionStorage or route the user back to the quiz.
+ */
+export function decodeQuizAnswers(token: string): QuizAnswers | null {
+  if (!token) return null;
+  try {
+    const b64 = fromUrlSafeBase64(token);
+    let json: string;
+    if (typeof Buffer !== "undefined") {
+      json = Buffer.from(b64, "base64").toString("utf8");
+    } else {
+      json = decodeURIComponent(escape(atob(b64)));
+    }
+    const parsed = JSON.parse(json);
+    if (!parsed || typeof parsed !== "object") return null;
+    return parsed as QuizAnswers;
+  } catch {
+    return null;
+  }
+}
+
+/** Build a full shareable results URL from quiz answers. */
+export function buildShareUrl(origin: string, answers: QuizAnswers): string {
+  const token = encodeQuizAnswers(answers);
+  const base = origin.replace(/\/+$/, "");
+  return `${base}/results?${SHARE_QUERY_PARAM}=${token}`;
+}
 
 export interface ShareInput {
   results: GloveMatchResult[];

@@ -10,7 +10,13 @@ import type {
   SizeRecommendation,
 } from "@/lib/glove/types";
 import { POSITION_LABELS, SPORT_LABELS } from "@/lib/glove/constants";
-import { formatResultsAsText, buildMailtoUrl } from "@/lib/glove/share";
+import {
+  formatResultsAsText,
+  buildMailtoUrl,
+  buildShareUrl,
+  decodeQuizAnswers,
+  SHARE_QUERY_PARAM,
+} from "@/lib/glove/share";
 import { GloveCard } from "./GloveCard";
 
 interface ApiResponse {
@@ -19,6 +25,12 @@ interface ApiResponse {
   size: SizeRecommendation;
   /** True when NO glove in the sport catalog sits inside the user's budget. */
   budgetMismatch?: boolean;
+}
+
+interface ReadyPayload extends ApiResponse {
+  /** The original quiz answers used to produce these results — kept so we
+      can build a shareable URL that reconstructs the exact run. */
+  answers: QuizAnswers;
 }
 
 /**
@@ -33,28 +45,60 @@ export function ResultsClient() {
   const [state, setState] = useState<
     | { status: "loading" }
     | { status: "error"; message: string }
-    | { status: "ready"; data: ApiResponse }
+    | { status: "ready"; data: ReadyPayload }
   >({ status: "loading" });
 
   useEffect(() => {
     let cancelled = false;
 
     async function run() {
-      const stored = sessionStorage.getItem("kip-quiz-answers");
-      if (!stored) {
-        router.replace("/quiz");
-        return;
+      // Prefer the share-link token in ?a=... so a pasted URL reconstructs
+      // the exact quiz. If that's absent or malformed we fall back to
+      // sessionStorage (the user's own tab coming from /quiz). If both are
+      // missing, push them back to the quiz.
+      let answers: QuizAnswers | null = null;
+
+      if (typeof window !== "undefined") {
+        const params = new URLSearchParams(window.location.search);
+        const token = params.get(SHARE_QUERY_PARAM);
+        if (token) {
+          const decoded = decodeQuizAnswers(token);
+          if (decoded) {
+            answers = decoded;
+            // Mirror into sessionStorage so a retake/refresh works without
+            // the token still in the URL, and tidy the URL so it doesn't
+            // grow stale on subsequent interactions.
+            try {
+              sessionStorage.setItem(
+                "kip-quiz-answers",
+                JSON.stringify(decoded),
+              );
+            } catch {
+              /* sessionStorage may be disabled — not fatal. */
+            }
+            const cleanUrl =
+              window.location.pathname + window.location.hash;
+            window.history.replaceState({}, "", cleanUrl);
+          }
+        }
       }
 
-      let answers: QuizAnswers;
-      try {
-        answers = JSON.parse(stored);
-      } catch {
-        setState({
-          status: "error",
-          message: "Your quiz answers couldn't be read. Please retake the quiz.",
-        });
-        return;
+      if (!answers) {
+        const stored = sessionStorage.getItem("kip-quiz-answers");
+        if (!stored) {
+          router.replace("/quiz");
+          return;
+        }
+        try {
+          answers = JSON.parse(stored) as QuizAnswers;
+        } catch {
+          setState({
+            status: "error",
+            message:
+              "Your quiz answers couldn't be read. Please retake the quiz.",
+          });
+          return;
+        }
       }
 
       try {
@@ -68,7 +112,11 @@ export function ResultsClient() {
           throw new Error(body.error ?? `Request failed (${res.status})`);
         }
         const data = (await res.json()) as ApiResponse;
-        if (!cancelled) setState({ status: "ready", data });
+        if (!cancelled)
+          setState({
+            status: "ready",
+            data: { ...data, answers: answers as QuizAnswers },
+          });
       } catch (err) {
         if (!cancelled) {
           setState({
@@ -130,7 +178,13 @@ function ErrorState({ message }: { message: string }) {
 
 // ─── Ready ──────────────────────────────────────────────────────────────────
 
-function ReadyState({ results, profile, size, budgetMismatch }: ApiResponse) {
+function ReadyState({
+  results,
+  profile,
+  size,
+  budgetMismatch,
+  answers,
+}: ReadyPayload) {
   if (results.length === 0) {
     return (
       <div className="card text-center">
@@ -191,7 +245,11 @@ function ReadyState({ results, profile, size, budgetMismatch }: ApiResponse) {
             Your top {results.length}
           </h2>
           <div className="flex flex-wrap items-center gap-2">
-            <ShareActions results={results} profile={profile} />
+            <ShareActions
+              results={results}
+              profile={profile}
+              answers={answers}
+            />
             <Link href="/quiz" className="btn-ghost">
               Retake quiz →
             </Link>
@@ -227,60 +285,92 @@ function BudgetBanner({ profile }: { profile: UserProfile }) {
   );
 }
 
-// ─── Share actions (Copy + Email) ───────────────────────────────────────────
+// ─── Share actions (Copy link + Copy text + Email) ─────────────────────────
+
+type CopyTarget = "link" | "text";
+type CopyStatus =
+  | { kind: "idle" }
+  | { kind: "copied"; target: CopyTarget }
+  | { kind: "error"; target: CopyTarget };
+
+async function writeToClipboard(value: string) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(value);
+    return;
+  }
+  // Older browsers fallback.
+  const ta = document.createElement("textarea");
+  ta.value = value;
+  ta.style.position = "fixed";
+  ta.style.opacity = "0";
+  document.body.appendChild(ta);
+  ta.select();
+  document.execCommand("copy");
+  document.body.removeChild(ta);
+}
 
 function ShareActions({
   results,
   profile,
+  answers,
 }: {
   results: GloveMatchResult[];
   profile: UserProfile;
+  answers: QuizAnswers;
 }) {
-  const [status, setStatus] = useState<"idle" | "copied" | "error">("idle");
+  const [status, setStatus] = useState<CopyStatus>({ kind: "idle" });
 
   const origin =
     typeof window !== "undefined" ? window.location.origin : undefined;
-  const payload = { results, profile, origin };
+  const textPayload = { results, profile, origin };
 
-  async function handleCopy() {
-    const text = formatResultsAsText(payload);
+  async function handleCopy(target: CopyTarget) {
     try {
-      if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(text);
-      } else {
-        // Older browsers fallback.
-        const ta = document.createElement("textarea");
-        ta.value = text;
-        ta.style.position = "fixed";
-        ta.style.opacity = "0";
-        document.body.appendChild(ta);
-        ta.select();
-        document.execCommand("copy");
-        document.body.removeChild(ta);
-      }
-      setStatus("copied");
-      setTimeout(() => setStatus("idle"), 2000);
+      const value =
+        target === "link"
+          ? origin
+            ? buildShareUrl(origin, answers)
+            : ""
+          : formatResultsAsText(textPayload);
+      if (!value) throw new Error("Nothing to copy");
+      await writeToClipboard(value);
+      setStatus({ kind: "copied", target });
+      setTimeout(() => setStatus({ kind: "idle" }), 2000);
     } catch {
-      setStatus("error");
-      setTimeout(() => setStatus("idle"), 2500);
+      setStatus({ kind: "error", target });
+      setTimeout(() => setStatus({ kind: "idle" }), 2500);
     }
   }
 
-  const mailto = buildMailtoUrl(payload);
+  function labelFor(
+    target: CopyTarget,
+    idle: string,
+    copied: string,
+  ): string {
+    if (status.kind === "copied" && status.target === target) return copied;
+    if (status.kind === "error" && status.target === target) return "Copy failed";
+    return idle;
+  }
+
+  const mailto = buildMailtoUrl(textPayload);
 
   return (
-    <div className="flex items-center gap-2" aria-live="polite">
+    <div className="flex flex-wrap items-center gap-2" aria-live="polite">
       <button
         type="button"
-        onClick={handleCopy}
+        onClick={() => handleCopy("link")}
         className="btn-secondary text-sm"
-        aria-label="Copy results to clipboard"
+        aria-label="Copy shareable results link"
       >
-        {status === "copied"
-          ? "Copied ✓"
-          : status === "error"
-          ? "Copy failed"
-          : "Copy results"}
+        {labelFor("link", "Copy link", "Link copied ✓")}
+      </button>
+      <button
+        type="button"
+        onClick={() => handleCopy("text")}
+        className="btn-secondary text-sm"
+        aria-label="Copy results summary to clipboard"
+      >
+        {labelFor("text", "Copy results", "Copied ✓")}
       </button>
       <a
         href={mailto}

@@ -32,6 +32,12 @@ export function QuizContainer() {
   // Guard so auto-advance only fires once per answer change.
   const lastAdvancedKeyRef = useRef<string>("");
 
+  // Suppression flag set when the user explicitly clicks Back — prevents the
+  // auto-advance effect from immediately ricocheting forward again because
+  // the previous step's answer is still populated. Cleared on the next user
+  // interaction (selecting a different answer).
+  const suppressAdvanceRef = useRef(false);
+
   // Recompute visible questions on every render — branching happens here.
   const visibleQuestions = useMemo(
     () => getVisibleQuestions(answers),
@@ -42,14 +48,16 @@ export function QuizContainer() {
 
   // ── Answer setter ────────────────────────────────────────────────────────
   function setAnswer(key: keyof QuizAnswers, value: unknown) {
+    // Any new selection clears the back-suppression — selecting an answer is
+    // an intentional forward action.
+    suppressAdvanceRef.current = false;
     setAnswers((prev) => ({ ...prev, [key]: value }));
   }
 
   // ── Navigation ──────────────────────────────────────────────────────────
   function goBack() {
+    suppressAdvanceRef.current = true;
     setStepIndex((i) => Math.max(0, i - 1));
-    // Reset the advance guard when going back so re-selecting auto-advances.
-    lastAdvancedKeyRef.current = "";
   }
 
   async function submitAnswers() {
@@ -80,6 +88,19 @@ export function QuizContainer() {
 
     // Build a stable key so we only auto-advance once per (question, value).
     const advanceKey = `${current.id}:${JSON.stringify(answerForCurrent)}:${stepIndex}`;
+
+    // If the user just clicked Back, the previous step's answer is still in
+    // state — without this guard the effect would treat that as a fresh
+    // selection and immediately fire the timer to push them forward again.
+    // Record the current key as "already advanced" so subsequent renders stay
+    // idempotent until the user makes a new selection (which clears the
+    // suppression flag in setAnswer()).
+    if (suppressAdvanceRef.current) {
+      lastAdvancedKeyRef.current = advanceKey;
+      suppressAdvanceRef.current = false;
+      return;
+    }
+
     if (lastAdvancedKeyRef.current === advanceKey) return;
     lastAdvancedKeyRef.current = advanceKey;
 

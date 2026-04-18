@@ -70,6 +70,36 @@ function breakInPrefFromProfile(p: UserProfile): BreakInPrefLabel {
   return "balanced";
 }
 
+// ─── Budget-gap helpers ───────────────────────────────────────────────────────
+// The tradeoff + avoidIf copy adapts based on how far over budget the glove is,
+// and how often the player uses it. This lets us say something concrete
+// ("end-of-season sale closes that gap") instead of a generic "it costs more."
+
+/** Price delta above the user's ceiling (0 if inside or below). */
+function overBudgetAmount(p: UserProfile, g: GloveProduct): number {
+  return Math.max(0, g.price - p.budgetMax);
+}
+
+/** Delta as a fraction of the ceiling — e.g. 0.25 = 25% over. */
+function overBudgetRatio(p: UserProfile, g: GloveProduct): number {
+  if (p.budgetMax <= 0) return 0;
+  return overBudgetAmount(p, g) / p.budgetMax;
+}
+
+type BudgetGap = "inside" | "small" | "medium" | "large";
+function budgetGap(p: UserProfile, g: GloveProduct): BudgetGap {
+  const ratio = overBudgetRatio(p, g);
+  if (ratio <= 0) return "inside";
+  if (ratio <= 0.2) return "small";
+  if (ratio <= 0.5) return "medium";
+  return "large";
+}
+
+/** Nice dollar-delta string, e.g. "$45". */
+function dollarGap(p: UserProfile, g: GloveProduct): string {
+  return `$${Math.round(overBudgetAmount(p, g))}`;
+}
+
 // ─── Reason generators ────────────────────────────────────────────────────────
 
 interface Generator {
@@ -218,12 +248,42 @@ const GENERATORS: Generator[] = [
     text: (p, g) =>
       `Stiffness of ${g.stiffness}/5 will need real work before game use — conditioning oil and catch drills required.`,
   },
+  // Price gap — three tiers, only one fires at a time thanks to budgetGap().
+
+  // Small stretch (≤ 20% over): nudge toward sales / last year's model.
   {
     type: "tradeoff",
     priority: 95,
-    condition: (p, g) => g.price > p.budgetMax,
+    condition: (p, g) => budgetGap(p, g) === "small",
     text: (p, g) =>
-      `Price of $${g.price} is above your $${p.budgetMax} ceiling — factor in the gap if you stretch for this one.`,
+      `Only ${dollarGap(p, g)} over your $${p.budgetMax} ceiling — last year's colorway or an end-of-season sale usually closes that gap without dropping a tier.`,
+  },
+
+  // Medium stretch (20–50% over): reframe as cost-per-season or suggest the
+  // secondhand market where enthusiasts resell lightly-used premium leather.
+  {
+    type: "tradeoff",
+    priority: 94,
+    condition: (p, g) => budgetGap(p, g) === "medium",
+    text: (p, g) => {
+      const freq = p.playFrequency;
+      const seasonFraming =
+        freq === "competitive"
+          ? "if you're on the field year-round, the per-season cost is modest"
+          : freq === "weekly"
+          ? "if you play weekly, amortised across a season the stretch is smaller than it looks"
+          : "if this will mostly see weekend use, the stretch is harder to justify";
+      return `${dollarGap(p, g)} above your $${p.budgetMax} ceiling — ${seasonFraming}. Otherwise, lightly-used copies on SidelineSwap or Facebook glove groups often sell a full tier below retail.`;
+    },
+  },
+
+  // Large stretch (> 50% over): recommend a step down or the pre-owned market.
+  {
+    type: "tradeoff",
+    priority: 93,
+    condition: (p, g) => budgetGap(p, g) === "large",
+    text: (p, g) =>
+      `Price of $${g.price} is well past your $${p.budgetMax} ceiling (${dollarGap(p, g)} over). Consider the brand's mid-grade line, or shop the pre-owned market — a used premium glove often beats a new entry-level one on feel and longevity.`,
   },
   {
     type: "tradeoff",
@@ -292,13 +352,55 @@ const GENERATORS: Generator[] = [
 
   // ── Avoid if ─────────────────────────────────────────────────────────────────
 
+  // Budget-strict: meaningfully over budget AND the player said they're casual
+  // — the ROI on the extra spend just isn't there.
+  {
+    type: "avoidIf",
+    priority: 105,
+    condition: (p, g) =>
+      budgetGap(p, g) === "large" && p.playFrequency === "casual",
+    text: (p, g) =>
+      `Avoid this if $${p.budgetMax} is a hard ceiling — this runs ${dollarGap(p, g)} above it, and at casual play frequency you'll get most of the value from a glove a tier below.`,
+  },
+  {
+    type: "avoidIf",
+    priority: 103,
+    condition: (p, g) =>
+      budgetGap(p, g) !== "inside" &&
+      budgetGap(p, g) !== "small" &&
+      p.playFrequency !== "casual",
+    text: (p, g) =>
+      `Avoid this if your budget is firm — it's ${dollarGap(p, g)} over and the matching glove one tier down will do the same job for less.`,
+  },
+
+  // Quality mismatch: premium leather + casual play = over-spec purchase.
+  {
+    type: "avoidIf",
+    priority: 102,
+    condition: (p, g) =>
+      g.leatherQuality >= 5 && p.playFrequency === "casual",
+    text: () =>
+      `Avoid this if you're playing casually — pro-grade leather is built for daily tournament use and will feel like overkill for monthly pickup games.`,
+  },
+
+  // Break-in investment mismatch: stiff glove + casual player who doesn't
+  // want to commit 4–6 weeks of conditioning.
+  {
+    type: "avoidIf",
+    priority: 101,
+    condition: (p, g) =>
+      g.stiffness >= 4 && p.playFrequency === "casual",
+    text: () =>
+      `Avoid this if you don't want to spend 4–6 weeks breaking in a glove — that investment pays off for players on the field often, less so for weekend use.`,
+  },
+
   {
     type: "avoidIf",
     priority: 100,
     condition: (p, g) =>
       g.stiffness >= 4 && p.experienceLevel === "beginner",
     text: () =>
-      `Avoid this if you are a beginner who needs a glove ready to use soon — breaking in stiff leather takes significant time and effort.`,
+      `Avoid this if you're newer to the game and want something ready to use soon — breaking in stiff leather takes real time, catch drills, and conditioning.`,
   },
   {
     type: "avoidIf",
