@@ -8,9 +8,9 @@ export const metadata = {
     "Browse the full Kip It Real glove catalog. Filter by sport, position, brand, and price.",
 };
 
-// Revalidate once an hour — the catalog only changes when the sheet changes,
-// and the underlying loader already caches the CSV fetch for 5 minutes.
-export const revalidate = 3600;
+// Match the 5-minute Sheets fetch cache — no point caching the page longer
+// than the underlying data source.
+export const revalidate = 300;
 
 export default async function BrowsePage() {
   // Published catalog across all sports. Fall back to includeDrafts if the
