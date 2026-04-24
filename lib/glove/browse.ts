@@ -12,6 +12,7 @@ export interface BrowseFilters {
   sport?: SportType | "all";
   position?: PositionType | "all";
   brand?: string | "all";
+  series?: string | "all";
   minPrice?: number;
   maxPrice?: number;
   query?: string;
@@ -48,6 +49,9 @@ export function matchesBrowseFilters(
     return false;
   }
   if (filters.brand && filters.brand !== "all" && glove.brand !== filters.brand) {
+    return false;
+  }
+  if (filters.series && filters.series !== "all" && glove.series !== filters.series) {
     return false;
   }
   if (typeof filters.minPrice === "number" && glove.price < filters.minPrice) {
@@ -88,6 +92,13 @@ export function sortBrowseGloves(
         return a.price - b.price;
       });
   }
+}
+
+/** Extract unique series names from a catalog, alphabetically. */
+export function uniqueSeries(gloves: GloveProduct[]): string[] {
+  return Array.from(
+    new Set(gloves.map((g) => g.series).filter((s): s is string => !!s))
+  ).sort((a, b) => a.localeCompare(b));
 }
 
 /** Extract unique brand names from a catalog, alphabetically. */

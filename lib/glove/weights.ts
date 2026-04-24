@@ -54,6 +54,9 @@ export const DEFAULT_WEIGHTS: ScoringWeights = {
 
   /** Is the glove appropriate for young hands? (youth only) */
   youthFriendliness: 2,
+
+  /** Value-for-money dimension. Low weight — breaks ties without overpowering fit. */
+  valueFit: 3,
 };
 
 // ─── Sport-specific overrides ─────────────────────────────────────────────────
@@ -92,19 +95,20 @@ export const FASTPITCH_WEIGHTS: ScoringWeights = {
 };
 
 /**
- * Slowpitch weights: versatility and catch security are more important.
- * Transfer speed and premium leather matter less for recreational play.
+ * Slowpitch weights: catch security and leather quality matter more than
+ * baseball; position fit is softer because utility-tagged gloves are common
+ * in the slowpitch market and versatility is inferred (not asked).
  */
 export const SLOWPITCH_WEIGHTS: ScoringWeights = {
   ...DEFAULT_WEIGHTS,
-  positionFit: 16,
+  positionFit: 14,          // softened from 16 — utility matches now score 0.65
   sizeFit: 12,
   pocketFit: 14,            // catch security / deeper pockets rewarded more
   fitProfile: 8,
   breakInFit: 10,
-  leatherQualityFit: 6,     // rec-league players are less leather-quality sensitive
-  budgetFit: 14,            // price matters more in rec-league context
-  versatilityFit: 10,       // being able to play multiple spots is a real plus
+  leatherQualityFit: 10,    // raised from 6 — leather matters for premium path
+  budgetFit: 14,            // price still matters for rec-league context
+  versatilityFit: 8,        // inferred from positions, reduced from 10
   sportSpecificFit: 4,
   fastpitchFitImportance: 0,
   youthFriendliness: 2,

@@ -200,3 +200,27 @@ export function sizeRange(input: SizeLookupInput): [number, number] {
   const rec = recommendSize(input);
   return [rec.min, rec.max];
 }
+
+/**
+ * Returns the union of valid size ranges across all given positions for
+ * use in the quiz size-preference question. Returns null when all positions
+ * are catchers (their circumference sizes live on a different scale and
+ * would confuse the inch-based size picker).
+ */
+export function getSizeOptionsRange(
+  sport: SportType,
+  positions: PositionType[],
+  ageGroup: AgeGroup,
+): { min: number; max: number } | null {
+  const nonCatcher = positions.filter((p) => p !== "catcher");
+  if (nonCatcher.length === 0) return null;
+
+  let min = Infinity;
+  let max = -Infinity;
+  for (const pos of nonCatcher) {
+    const [lo, hi] = SIZE_TABLE[sport][pos][ageGroup];
+    min = Math.min(min, lo);
+    max = Math.max(max, hi);
+  }
+  return { min, max };
+}

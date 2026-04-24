@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { recommendSize, sizeRange } from "@/lib/glove/sizing";
+import { recommendSize, sizeRange, getSizeOptionsRange } from "@/lib/glove/sizing";
 
 describe("recommendSize", () => {
   // ── Baseball ─────────────────────────────────────────────────────────────
@@ -166,5 +166,47 @@ describe("sizeRange", () => {
     const [min, max] = sizeRange(input);
     expect(min).toBe(rec.min);
     expect(max).toBe(rec.max);
+  });
+});
+
+describe("getSizeOptionsRange", () => {
+  it("returns the table range for a single non-catcher position", () => {
+    const range = getSizeOptionsRange("baseball", ["infield"], "adult");
+    expect(range).not.toBeNull();
+    expect(range!.min).toBe(11.25);
+    expect(range!.max).toBe(11.75);
+  });
+
+  it("unions ranges across two positions (infield + outfield)", () => {
+    const range = getSizeOptionsRange("baseball", ["infield", "outfield"], "adult");
+    expect(range).not.toBeNull();
+    // min from infield (11.25), max from outfield (12.75)
+    expect(range!.min).toBe(11.25);
+    expect(range!.max).toBe(12.75);
+  });
+
+  it("returns null when only catchers are in the positions list", () => {
+    const range = getSizeOptionsRange("baseball", ["catcher"], "adult");
+    expect(range).toBeNull();
+  });
+
+  it("ignores catcher when mixed with fielding positions", () => {
+    const mixed = getSizeOptionsRange("baseball", ["catcher", "infield"], "adult");
+    const fieldingOnly = getSizeOptionsRange("baseball", ["infield"], "adult");
+    expect(mixed).toEqual(fieldingOnly);
+  });
+
+  it("respects age group — youth is smaller than adult", () => {
+    const youth = getSizeOptionsRange("baseball", ["infield"], "youth");
+    const adult = getSizeOptionsRange("baseball", ["infield"], "adult");
+    expect(youth!.min).toBeLessThan(adult!.min);
+    expect(youth!.max).toBeLessThan(adult!.max);
+  });
+
+  it("returns different ranges for different sports", () => {
+    const bb = getSizeOptionsRange("baseball", ["outfield"], "adult");
+    const sp = getSizeOptionsRange("slowpitch", ["outfield"], "adult");
+    // Slowpitch outfield gloves run larger
+    expect(sp!.max).toBeGreaterThan(bb!.max);
   });
 });

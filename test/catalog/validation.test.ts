@@ -199,6 +199,96 @@ describe("validateGloveRow", () => {
     // but we check that the bad link produced an error
     expect(result.errors.some((e) => e.includes("purchaseLinks"))).toBe(true);
   });
+
+  // ── series ─────────────────────────────────────────────────────────────────
+
+  it("parses series when present", () => {
+    const result = validateGloveRow({ ...VALID_ROW, series: "Heart of the Hide" });
+    expect(result.valid).toBe(true);
+    expect(result.product?.series).toBe("Heart of the Hide");
+  });
+
+  it("trims whitespace from series", () => {
+    const result = validateGloveRow({ ...VALID_ROW, series: "  A2000  " });
+    expect(result.product?.series).toBe("A2000");
+  });
+
+  it("leaves series undefined when field is blank", () => {
+    const result = validateGloveRow({ ...VALID_ROW, series: "" });
+    expect(result.valid).toBe(true);
+    expect(result.product?.series).toBeUndefined();
+  });
+
+  it("leaves series undefined when field is whitespace-only", () => {
+    const result = validateGloveRow({ ...VALID_ROW, series: "   " });
+    expect(result.product?.series).toBeUndefined();
+  });
+
+  it("leaves series undefined when field is absent", () => {
+    const { series: _s, ...rowWithout } = { ...VALID_ROW, series: undefined };
+    const result = validateGloveRow(rowWithout);
+    expect(result.valid).toBe(true);
+    expect(result.product?.series).toBeUndefined();
+  });
+
+  // ── valueTier ──────────────────────────────────────────────────────────────
+
+  it("parses valueTier when present", () => {
+    const result = validateGloveRow({ ...VALID_ROW, valueTier: "Strong Value" });
+    expect(result.valid).toBe(true);
+    expect(result.product?.valueTier).toBe("Strong Value");
+  });
+
+  it("leaves valueTier undefined when field is blank", () => {
+    const result = validateGloveRow({ ...VALID_ROW, valueTier: "" });
+    expect(result.product?.valueTier).toBeUndefined();
+  });
+
+  it("leaves valueTier undefined when field is whitespace-only", () => {
+    const result = validateGloveRow({ ...VALID_ROW, valueTier: "   " });
+    expect(result.product?.valueTier).toBeUndefined();
+  });
+
+  // ── valueScore ─────────────────────────────────────────────────────────────
+
+  it("parses valueScore as a number", () => {
+    const result = validateGloveRow({ ...VALID_ROW, valueScore: "85" });
+    expect(result.valid).toBe(true);
+    expect(result.product?.valueScore).toBe(85);
+  });
+
+  it("leaves valueScore undefined when field is blank", () => {
+    const result = validateGloveRow({ ...VALID_ROW, valueScore: "" });
+    expect(result.product?.valueScore).toBeUndefined();
+  });
+
+  it("leaves valueScore undefined when field is absent", () => {
+    const result = validateGloveRow({ ...VALID_ROW });
+    expect(result.product?.valueScore).toBeUndefined();
+  });
+
+  it("leaves valueScore undefined when value is non-numeric", () => {
+    const result = validateGloveRow({ ...VALID_ROW, valueScore: "great" });
+    expect(result.product?.valueScore).toBeUndefined();
+  });
+
+  it("clamps valueScore above 100 to 100", () => {
+    const result = validateGloveRow({ ...VALID_ROW, valueScore: "150" });
+    expect(result.product?.valueScore).toBe(100);
+  });
+
+  it("clamps valueScore below 0 to 0", () => {
+    const result = validateGloveRow({ ...VALID_ROW, valueScore: "-5" });
+    expect(result.product?.valueScore).toBe(0);
+  });
+
+  it("existing rows without new fields still validate correctly (backward compat)", () => {
+    const result = validateGloveRow(VALID_ROW);
+    expect(result.valid).toBe(true);
+    expect(result.product?.series).toBeUndefined();
+    expect(result.product?.valueTier).toBeUndefined();
+    expect(result.product?.valueScore).toBeUndefined();
+  });
 });
 
 // ─── validateBatch ────────────────────────────────────────────────────────────

@@ -4,7 +4,6 @@ import { scoreGlove } from "@/lib/glove/scoring";
 import { weightsForSport } from "@/lib/glove/weights";
 import {
   ADULT_INFIELD_BASEBALL_PROFILE,
-  YOUTH_INFIELD_BASEBALL_PROFILE,
   FASTPITCH_PROFILE,
   BASEBALL_INFIELD_GLOVE,
   FASTPITCH_GLOVE,
@@ -45,28 +44,12 @@ describe("generateExplanation", () => {
     expect(tradeoffs.length).toBeGreaterThanOrEqual(1);
   });
 
-  it("returns at most 3 tradeoffs", () => {
+  it("returns at most 4 tradeoffs", () => {
     const { tradeoffs } = explainFor(
       ADULT_INFIELD_BASEBALL_PROFILE,
       BASEBALL_INFIELD_GLOVE,
     );
-    expect(tradeoffs.length).toBeLessThanOrEqual(3);
-  });
-
-  it("returns at least 1 avoidIf", () => {
-    const { avoidIf } = explainFor(
-      ADULT_INFIELD_BASEBALL_PROFILE,
-      BASEBALL_INFIELD_GLOVE,
-    );
-    expect(avoidIf.length).toBeGreaterThanOrEqual(1);
-  });
-
-  it("returns at most 2 avoidIf statements", () => {
-    const { avoidIf } = explainFor(
-      ADULT_INFIELD_BASEBALL_PROFILE,
-      BASEBALL_INFIELD_GLOVE,
-    );
-    expect(avoidIf.length).toBeLessThanOrEqual(2);
+    expect(tradeoffs.length).toBeLessThanOrEqual(4);
   });
 
   // ── No filler language ───────────────────────────────────────────────────
@@ -124,15 +107,6 @@ describe("generateExplanation", () => {
     expect(combined).toMatch(/11\.75|size|range/);
   });
 
-  it("mentions youth when player is youth and glove is not youth-friendly", () => {
-    const { avoidIf } = explainFor(
-      YOUTH_INFIELD_BASEBALL_PROFILE,
-      BASEBALL_INFIELD_GLOVE, // youthFriendly: false
-    );
-    const combined = avoidIf.join(" ").toLowerCase();
-    expect(combined).toMatch(/young|youth|smaller|hand/);
-  });
-
   it("mentions fastpitch fit when player flagged it as important", () => {
     const { reasons } = explainFor(
       FASTPITCH_PROFILE,
@@ -146,11 +120,11 @@ describe("generateExplanation", () => {
   // ── All strings are non-empty ────────────────────────────────────────────
 
   it("all returned strings are non-empty", () => {
-    const { reasons, tradeoffs, avoidIf } = explainFor(
+    const { reasons, tradeoffs } = explainFor(
       ADULT_INFIELD_BASEBALL_PROFILE,
       BASEBALL_INFIELD_GLOVE,
     );
-    for (const s of [...reasons, ...tradeoffs, ...avoidIf]) {
+    for (const s of [...reasons, ...tradeoffs]) {
       expect(s.trim().length).toBeGreaterThan(0);
     }
   });
@@ -191,32 +165,5 @@ describe("generateExplanation", () => {
     for (const t of tradeoffs) {
       expect(t.toLowerCase()).not.toMatch(/above your \$|past your \$|over your \$/);
     }
-  });
-
-  // ── Avoid-if: budget strict + quality mismatch ───────────────────────────
-
-  it("surfaces a budget-strict avoidIf for casual players far over budget", () => {
-    const p = {
-      ...ADULT_INFIELD_BASEBALL_PROFILE,
-      playFrequency: "casual" as const,
-      budgetMax: 100,
-      budgetMin: 0,
-    };
-    const g = { ...BASEBALL_INFIELD_GLOVE, price: 300 }; // large gap
-    const { avoidIf } = explainFor(p, g);
-    const combined = avoidIf.join(" ").toLowerCase();
-    expect(combined).toMatch(/hard ceiling|tier below/);
-  });
-
-  it("surfaces a quality-mismatch avoidIf when casual player gets pro-grade leather", () => {
-    const p = {
-      ...ADULT_INFIELD_BASEBALL_PROFILE,
-      playFrequency: "casual" as const,
-      budgetMax: 500, // keep it in-budget so only quality mismatch fires
-    };
-    const g = { ...BASEBALL_INFIELD_GLOVE, leatherQuality: 5 as const, price: 300 };
-    const { avoidIf } = explainFor(p, g);
-    const combined = avoidIf.join(" ").toLowerCase();
-    expect(combined).toMatch(/pro-grade|overkill|casually/);
   });
 });

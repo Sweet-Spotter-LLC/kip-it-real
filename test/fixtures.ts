@@ -162,9 +162,9 @@ export const ADULT_INFIELD_BASEBALL_PROFILE: UserProfile = {
   budgetMin: 0,
   budgetMax: 400,
   wantsVersatility: false,
-  wantsFastClose: false,
   wantsPremiumLeather: true,
   fastpitchFitImportant: false,
+  openToCrossoverGloves: false,
   recommendedSizeMin: 11.25,
   recommendedSizeMax: 11.75,
 };
@@ -176,7 +176,6 @@ export const ADULT_OUTFIELD_BASEBALL_PROFILE: UserProfile = {
   pocketDepthTarget: 2,
   breakInTolerance: 3,
   webPreference: "trap",
-  wantsFastClose: false,
   recommendedSizeMin: 12.25,
   recommendedSizeMax: 12.75,
 };
@@ -206,9 +205,9 @@ export const FASTPITCH_PROFILE: UserProfile = {
   budgetMin: 0,
   budgetMax: 300,
   wantsVersatility: false,
-  wantsFastClose: true,
   wantsPremiumLeather: false,
   fastpitchFitImportant: true,
+  openToCrossoverGloves: false,
   recommendedSizeMin: 11.75,
   recommendedSizeMax: 12.25,
 };
@@ -221,6 +220,28 @@ export const CATCHER_PROFILE: UserProfile = {
   webPreference: undefined,
   recommendedSizeMin: 32.5,
   recommendedSizeMax: 34.0,
+};
+
+export const SLOWPITCH_CROSSOVER_PROFILE: UserProfile = {
+  sport: "slowpitch",
+  ageGroup: "adult",
+  throwHand: "RHT",
+  primaryPosition: "utility",
+  gloveTypeNeeded: "fielding",
+  experienceLevel: "intermediate",
+  playFrequency: "weekly",
+  fitTarget: 0,
+  pocketDepthTarget: 0.5,
+  breakInTolerance: 3,
+  webPreference: undefined,
+  budgetMin: 0,
+  budgetMax: 400,
+  wantsVersatility: true,
+  wantsPremiumLeather: false,
+  fastpitchFitImportant: false,
+  openToCrossoverGloves: true,
+  recommendedSizeMin: 12.75,
+  recommendedSizeMax: 13.5,
 };
 
 // ─── Quiz answer fixtures ──────────────────────────────────────────────────
@@ -238,8 +259,6 @@ export const ADULT_BASEBALL_INFIELD_ANSWERS: QuizAnswers = {
   webPreference: "i_web",
   budgetMax: 400,
   wantsPremiumLeather: true,
-  wantsFastClose: false,
-  wantsVersatility: false,
 };
 
 // ─── Minimal valid catalog for filter/ranking tests ────────────────────────

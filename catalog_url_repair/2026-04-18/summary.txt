@@ -1,0 +1,9 @@
+URL repair summary
+────────────────────────────────────────
+  Fixed:    25
+  Unchanged:0
+  Review:   13
+
+  Workbook:    Glove_CatalogV1_urls_repaired.xlsx
+  Change log:  change_log.csv
+  Review list: needs_review.csv

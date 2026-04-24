@@ -287,6 +287,12 @@ export function validateGloveRow(raw: Record<string, unknown>): ValidationResult
   const slowpitchFriendly = asBool(raw.slowpitchFriendly, "slowpitchFriendly", errors);
   const inProduction = asBool(raw.inProduction, "inProduction", errors);
 
+  // ── Optional booleans ───────────────────────────────────────────────────────
+  const crossoverViable =
+    raw.crossoverViable !== undefined && raw.crossoverViable !== ""
+      ? asBool(raw.crossoverViable, "crossoverViable", errors)
+      : undefined;
+
   // ── Optional strings ────────────────────────────────────────────────────────
   const lastVerified =
     typeof raw.lastVerified === "string" && raw.lastVerified.trim()
@@ -307,6 +313,24 @@ export function validateGloveRow(raw: Record<string, unknown>): ValidationResult
     "purchaseLinks",
     errors,
   );
+
+  // ── Optional new catalog fields ─────────────────────────────────────────────
+  const series =
+    typeof raw.series === "string" && raw.series.trim()
+      ? raw.series.trim()
+      : undefined;
+
+  const valueTier =
+    typeof raw.valueTier === "string" && raw.valueTier.trim()
+      ? raw.valueTier.trim()
+      : undefined;
+
+  const valueScore: number | undefined = (() => {
+    if (raw.valueScore === undefined || raw.valueScore === "") return undefined;
+    const n = Number(raw.valueScore);
+    if (isNaN(n)) return undefined;
+    return Math.max(0, Math.min(n, 100));
+  })();
 
   // ── Range sanity checks ─────────────────────────────────────────────────────
   if (price < 0) errors.push("price: must be >= 0");
@@ -350,6 +374,7 @@ export function validateGloveRow(raw: Record<string, unknown>): ValidationResult
     youthFriendly,
     fastpitchFit,
     slowpitchFriendly,
+    crossoverViable,
     price,
     msrp,
     inProduction,
@@ -358,6 +383,9 @@ export function validateGloveRow(raw: Record<string, unknown>): ValidationResult
     notes,
     purchaseLinks,
     status,
+    series,
+    valueTier,
+    valueScore,
   };
 
   return { valid: true, errors: [], product };

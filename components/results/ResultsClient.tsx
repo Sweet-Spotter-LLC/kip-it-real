@@ -223,12 +223,14 @@ function ReadyState({
           />
           <MetaCell
             label="Budget ceiling"
-            value={`$${profile.budgetMax}`}
+            value={
+              profile.wantsPremiumLeather
+                ? "N/A — Kippin it real"
+                : `$${profile.budgetMax}`
+            }
             sub={
               profile.wantsPremiumLeather
-                ? "Premium leather prioritised"
-                : profile.wantsFastClose
-                ? "Fast close prioritised"
+                ? "Premium leather prioritized"
                 : "Balanced across dimensions"
             }
           />

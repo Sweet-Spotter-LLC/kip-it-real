@@ -27,9 +27,10 @@ export async function POST(req: Request) {
   }
 
   // Minimal sanity-check on required fields before normalising.
+  // ageGroup is omitted — slowpitch skips that question and profile.ts
+  // defaults to "adult" automatically.
   const required: Array<keyof QuizAnswers> = [
     "sport",
-    "ageGroup",
     "throwHand",
     "primaryPosition",
     "experienceLevel",
@@ -59,16 +60,29 @@ export async function POST(req: Request) {
     });
   }
 
+  // For softball players who opted into baseball crossover gloves, merge the
+  // full baseball catalog so those gloves can reach the hard filter and compete
+  // on their own merits. The hard filter in filters.ts already gates on
+  // openToCrossoverGloves + slowpitchFriendly / crossoverViable, so no extra
+  // filtering logic is needed here.
+  if (profile.openToCrossoverGloves) {
+    let bbCatalog = await loadCatalog({ sport: "baseball" });
+    if (bbCatalog.length === 0) {
+      bbCatalog = await loadCatalog({ sport: "baseball", includeDrafts: true });
+    }
+    catalog = [...catalog, ...bbCatalog];
+  }
+
   const results = rankGloves(profile, catalog);
 
   // Compute the display-friendly size recommendation for the results header.
   const size = recommendSize({
     sport: answers.sport,
-    ageGroup: answers.ageGroup,
+    ageGroup: answers.ageGroup ?? "adult",
     primaryPosition: answers.primaryPosition,
     experienceLevel: answers.experienceLevel,
     fastpitchFitImportant: answers.fastpitchFitImportant,
-    wantsVersatility: answers.wantsVersatility,
+    wantsVersatility: profile.wantsVersatility,
   });
 
   // Flag so the results page can show a "no in-budget matches" banner.

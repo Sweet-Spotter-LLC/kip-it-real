@@ -51,7 +51,11 @@ export type CatalogStatus = "draft" | "published";
 
 export interface QuizAnswers {
   sport: SportType;
-  ageGroup: "youth" | "teen" | "adult";
+  /**
+   * Omitted for slowpitch (auto-assumed adult). Profile builder defaults to
+   * "adult" when undefined.
+   */
+  ageGroup?: "youth" | "teen" | "adult";
   throwHand: ThrowHand;
   primaryPosition: PositionType;
   /**
@@ -75,12 +79,21 @@ export interface QuizAnswers {
    */
   budgetSkipped?: boolean;
   preferredBrands?: string[];
-  /** Only asked for infield / utility — suppressed for other positions. */
-  wantsFastClose?: boolean;
   /** The "Kip it Real?" fork-in-the-road — true locks in premium path. */
   wantsPremiumLeather?: boolean;
-  wantsVersatility?: boolean;
   fastpitchFitImportant?: boolean;
+  /**
+   * Fastpitch / slowpitch players only. When true, baseball gloves marked
+   * crossoverViable may enter the candidate pool with a small scoring penalty.
+   */
+  openToCrossoverGloves?: boolean;
+  /**
+   * Optional glove size preference in inches. When set to a number, the
+   * profile builder narrows the recommended size window to ±0.25" around
+   * this value. The string sentinel "any" means "choose for me" — the
+   * algorithm's normal size recommendation is used unchanged.
+   */
+  preferredSizeInches?: number | "any";
 }
 
 export interface UserProfile {
@@ -102,9 +115,10 @@ export interface UserProfile {
   budgetMin: number;
   budgetMax: number;
   wantsVersatility: boolean;
-  wantsFastClose: boolean;
   wantsPremiumLeather: boolean;
   fastpitchFitImportant: boolean;
+  /** True when the player said yes to baseball crossover gloves. */
+  openToCrossoverGloves: boolean;
   /** Brand allowlist. Empty/undefined = user is open to any brand. */
   preferredBrands?: string[];
   recommendedSizeMin: number;
@@ -151,6 +165,12 @@ export interface GloveProduct {
   youthFriendly: boolean;
   fastpitchFit: boolean;
   slowpitchFriendly: boolean;
+  /**
+   * When true on a baseball glove, it may appear in fastpitch/slowpitch
+   * results when the player opts into crossover suggestions. Never set
+   * this on softball gloves — it has no effect there.
+   */
+  crossoverViable?: boolean;
   price: number;
   msrp?: number;
   inProduction: boolean;
@@ -159,6 +179,12 @@ export interface GloveProduct {
   notes?: string;
   purchaseLinks?: PurchaseLink[];
   status: CatalogStatus;
+  /** Glove model family (e.g. "A2000", "Heart of the Hide", "R9"). Optional — not all entries have one. */
+  series?: string;
+  /** 0–100 value score: quality/performance relative to price. Higher = stronger value. Blank = neutral. */
+  valueScore?: number;
+  /** Human-readable value tier label (e.g. "Strong Value", "Premium Value"). Blank = not shown. */
+  valueTier?: string;
 }
 
 export interface ScoreBreakdownItem {
@@ -176,7 +202,6 @@ export interface GloveMatchResult {
   score: number;
   reasons: string[];
   tradeoffs: string[];
-  avoidIf: string[];
   breakdown: ScoreBreakdownItem[];
 }
 
@@ -236,4 +261,6 @@ export interface ScoringWeights {
   sportSpecificFit: number;
   fastpitchFitImportance: number;
   youthFriendliness: number;
+  /** Value-for-money dimension. Low weight — breaks ties without overpowering fit. */
+  valueFit: number;
 }

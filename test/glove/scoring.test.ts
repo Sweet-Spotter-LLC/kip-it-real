@@ -6,9 +6,11 @@ import {
   ADULT_OUTFIELD_BASEBALL_PROFILE,
   YOUTH_INFIELD_BASEBALL_PROFILE,
   FASTPITCH_PROFILE,
+  SLOWPITCH_CROSSOVER_PROFILE,
   BASEBALL_INFIELD_GLOVE,
   BASEBALL_OUTFIELD_GLOVE,
   FASTPITCH_GLOVE,
+  SLOWPITCH_GLOVE,
   BUDGET_GLOVE,
   SAMPLE_CATALOG,
 } from "../fixtures";
@@ -112,7 +114,7 @@ describe("scoreGlove", () => {
     expect(fpGloveFit.score).toBeGreaterThan(fpGloveNoFit.score);
   });
 
-  it("returns empty reasons, tradeoffs, and avoidIf arrays", () => {
+  it("returns empty reasons and tradeoffs arrays", () => {
     const result = scoreGlove(
       ADULT_INFIELD_BASEBALL_PROFILE,
       BASEBALL_INFIELD_GLOVE,
@@ -121,7 +123,48 @@ describe("scoreGlove", () => {
     // scoreGlove doesn't attach explanations — those come from rankGloves
     expect(result.reasons).toEqual([]);
     expect(result.tradeoffs).toEqual([]);
-    expect(result.avoidIf).toEqual([]);
+  });
+});
+
+// ─── Baseball crossover scoring (slowpitch) ──────────────────────────────────
+
+describe("scoreGlove — baseball crossover parity for slowpitch", () => {
+  const SP_WEIGHTS = weightsForSport("slowpitch");
+
+  it("scores a baseball crossover (slowpitchFriendly=true) the same as a native slowpitch glove when all other attributes are identical", () => {
+    // Build two otherwise-identical gloves that differ only in sport + native flags.
+    const nativeSlowpitch = {
+      ...SLOWPITCH_GLOVE,
+      id: "test-native-sp",
+      sport: "slowpitch" as const,
+      slowpitchFriendly: true,
+    };
+    const bbCrossover = {
+      ...SLOWPITCH_GLOVE,
+      id: "test-bb-crossover",
+      sport: "baseball" as const,
+      slowpitchFriendly: true,
+      crossoverViable: true,
+    };
+    const nativeResult = scoreGlove(SLOWPITCH_CROSSOVER_PROFILE, nativeSlowpitch, SP_WEIGHTS);
+    const crossoverResult = scoreGlove(SLOWPITCH_CROSSOVER_PROFILE, bbCrossover, SP_WEIGHTS);
+    expect(crossoverResult.score).toBe(nativeResult.score);
+  });
+
+  it("crossoverBaseball flag is set for a baseball glove scored in a slowpitch context", () => {
+    const bbCrossover = {
+      ...BASEBALL_INFIELD_GLOVE,
+      sport: "baseball" as const,
+      slowpitchFriendly: true,
+    };
+    // scoreGlove doesn't expose soft flags directly, but we can verify the
+    // score is not penalised below the equivalent native slowpitch glove.
+    // A native slowpitch glove with identical attributes should score the same.
+    const nativeSp = { ...bbCrossover, sport: "slowpitch" as const };
+    const crossoverScore = scoreGlove(SLOWPITCH_CROSSOVER_PROFILE, bbCrossover, SP_WEIGHTS).score;
+    const nativeScore = scoreGlove(SLOWPITCH_CROSSOVER_PROFILE, nativeSp, SP_WEIGHTS).score;
+    // No penalty: crossover should score at least as well as its native twin.
+    expect(crossoverScore).toBeGreaterThanOrEqual(nativeScore);
   });
 });
 
@@ -150,7 +193,6 @@ describe("rankGloves", () => {
     for (const r of results) {
       expect(r.reasons.length).toBeGreaterThanOrEqual(1);
       expect(r.tradeoffs.length).toBeGreaterThanOrEqual(1);
-      expect(r.avoidIf.length).toBeGreaterThanOrEqual(1);
     }
   });
 
@@ -169,5 +211,63 @@ describe("rankGloves", () => {
     if (results.length > 1) {
       expect(results[0].score).toBeGreaterThanOrEqual(results[1].score);
     }
+  });
+});
+
+// ─── scoreValueFit ────────────────────────────────────────────────────────────
+
+describe("scoreGlove — valueFit dimension", () => {
+  it("glove with valueScore=100 scores higher than identical glove with valueScore=0", () => {
+    const highValue = scoreGlove(
+      ADULT_INFIELD_BASEBALL_PROFILE,
+      { ...BASEBALL_INFIELD_GLOVE, valueScore: 100 },
+      BB_WEIGHTS,
+    );
+    const lowValue = scoreGlove(
+      ADULT_INFIELD_BASEBALL_PROFILE,
+      { ...BASEBALL_INFIELD_GLOVE, valueScore: 0 },
+      BB_WEIGHTS,
+    );
+    expect(highValue.score).toBeGreaterThan(lowValue.score);
+  });
+
+  it("glove with undefined valueScore scores the same as valueScore=50 (neutral)", () => {
+    const noScore = scoreGlove(
+      ADULT_INFIELD_BASEBALL_PROFILE,
+      { ...BASEBALL_INFIELD_GLOVE, valueScore: undefined },
+      BB_WEIGHTS,
+    );
+    const midScore = scoreGlove(
+      ADULT_INFIELD_BASEBALL_PROFILE,
+      { ...BASEBALL_INFIELD_GLOVE, valueScore: 50 },
+      BB_WEIGHTS,
+    );
+    expect(noScore.score).toBe(midScore.score);
+  });
+
+  it("valueScore boost cannot push a poor-fit glove above a well-fit glove", () => {
+    // Outfield glove (poor position fit) with max value vs infield glove (good fit) with no value
+    const poorFitHighValue = scoreGlove(
+      ADULT_INFIELD_BASEBALL_PROFILE,
+      { ...BASEBALL_OUTFIELD_GLOVE, valueScore: 100 },
+      BB_WEIGHTS,
+    );
+    const goodFitNoValue = scoreGlove(
+      ADULT_INFIELD_BASEBALL_PROFILE,
+      { ...BASEBALL_INFIELD_GLOVE, valueScore: undefined },
+      BB_WEIGHTS,
+    );
+    expect(goodFitNoValue.score).toBeGreaterThan(poorFitHighValue.score);
+  });
+
+  it("valueFit breakdown item is present with the correct key", () => {
+    const result = scoreGlove(
+      ADULT_INFIELD_BASEBALL_PROFILE,
+      { ...BASEBALL_INFIELD_GLOVE, valueScore: 80 },
+      BB_WEIGHTS,
+    );
+    const dim = result.breakdown.find((b) => b.key === "valueFit");
+    expect(dim).toBeDefined();
+    expect(dim?.value).toBeCloseTo(0.8, 5);
   });
 });

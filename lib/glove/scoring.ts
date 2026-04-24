@@ -21,6 +21,7 @@ import type {
   GloveMatchResult,
   ScoreBreakdownItem,
   ScoringWeights,
+  PurchaseLink,
 } from "./types";
 import { softFilter, filterCatalog, filterCatalogRelaxed } from "./filters";
 import { weightsForSport } from "./weights";
@@ -59,15 +60,33 @@ function proximitySub(
 /**
  * Position fit: does the glove's positionTags include the player's primary
  * position? Secondary position match is a bonus.
+ *
+ * Utility-tagged gloves receive partial credit for any standard fielding
+ * position — they're designed to play everywhere, so scoring them as a
+ * hard zero when the user picked "infield" (for example) is too punishing.
  */
 function scorePositionFit(profile: UserProfile, glove: GloveProduct): number {
   const primaryMatch = glove.positionTags.includes(profile.primaryPosition);
-  if (!primaryMatch) return 0;
+
+  // A utility-tagged glove covers any standard fielding spot.
+  const isUtilityGlove = glove.positionTags.includes("utility");
+  const isStandardFieldingPos =
+    profile.primaryPosition !== "catcher" &&
+    profile.primaryPosition !== "first_base";
+  const utilityMatch = !primaryMatch && isUtilityGlove && isStandardFieldingPos;
+
+  if (!primaryMatch && !utilityMatch) return 0;
 
   const secondaryMatch =
     profile.secondaryPosition &&
     glove.positionTags.includes(profile.secondaryPosition);
-  return secondaryMatch ? 1.0 : 0.85;
+
+  if (primaryMatch) {
+    return secondaryMatch ? 1.0 : 0.85;
+  }
+
+  // Utility glove covering the player's position but not explicitly tagged.
+  return secondaryMatch ? 0.80 : 0.65;
 }
 
 /**
@@ -148,8 +167,23 @@ function scoreLeatherQualityFit(
 /**
  * Web fit: direct match if player expressed a preference, otherwise
  * award based on whether the web is positionally appropriate.
+ *
+ * Special case: closed web is functionally incompatible with infield play
+ * (hides grip, slows transfer, wrong geometry). Apply a meaningful penalty
+ * regardless of preference. Pitcher positions are unaffected — closed web
+ * is the right choice there.
  */
 function scoreWebFit(profile: UserProfile, glove: GloveProduct): number {
+  const isClosedInfield =
+    glove.webType === "closed" && profile.primaryPosition === "infield";
+
+  if (isClosedInfield) {
+    // Even if the player asked for closed web, flag it as a mismatch.
+    // A player who specifically requested closed web still gets a gentle
+    // nudge (0.25) vs the harsher penalty for no preference (0.1).
+    return profile.webPreference === "closed" ? 0.25 : 0.1;
+  }
+
   if (!profile.webPreference) {
     // No preference — check if web is typical for this position.
     const meta = WEB_TYPE_META[glove.webType];
@@ -214,7 +248,9 @@ function scoreVersatilityFit(
 /**
  * Sport-specific fit: a residual check after hard filtering.
  * Fastpitch gloves in fastpitch context get a bonus.
- * Slowpitch gloves in slowpitch context get a bonus.
+ * Slowpitch-friendly gloves (native or baseball crossover) in a slowpitch
+ * context score equally — crossovers compete on their own merits without
+ * an artificial preference for purpose-built gear.
  */
 function scoreSportSpecificFit(
   profile: UserProfile,
@@ -248,6 +284,23 @@ function scoreYouthFriendliness(
   return glove.youthFriendly ? 1.0 : 0.3;
 }
 
+/**
+ * Value fit: rewards gloves with strong value scores.
+ * Weight is intentionally low (~3 out of ~106 total) so this can break
+ * ties and slightly elevate comparable gloves without overpowering
+ * position fit, size fit, leather quality, or budget alignment.
+ *
+ * Scoring:
+ *   - valueScore 0–100 → normalized to 0..1
+ *   - undefined (blank in catalog) → 0.5 (neutral; no help or harm)
+ *   - This does NOT double-count price: budgetFit already handles cost
+ *     alignment. valueScore captures quality-adjusted value, not just price.
+ */
+function scoreValueFit(_profile: UserProfile, glove: GloveProduct): number {
+  if (glove.valueScore === undefined) return 0.5; // neutral
+  return clamp(glove.valueScore / 100, 0, 1);
+}
+
 // ─── Soft filter penalties ────────────────────────────────────────────────────
 
 /**
@@ -268,6 +321,10 @@ function softPenalty(profile: UserProfile, glove: GloveProduct): number {
   if (flags.brandMismatch) penalty += 0.04;
   if (flags.secondaryPositionMismatch) penalty += 0.03;
   if (flags.underBudget) penalty += 0.02;
+  // Light crossover penalty: baseball glove in a fastpitch context.
+  // Slowpitch crossovers are explicitly selected via slowpitchFriendly —
+  // no penalty there; they compete on their own merits.
+  if (flags.crossoverBaseball && profile.sport === "fastpitch") penalty += 0.05;
 
   return clamp(1 - penalty, 0.75, 1.0); // never penalise more than 25 %
 }
@@ -286,10 +343,9 @@ export function scoreGlove(
   profile: UserProfile,
   glove: GloveProduct,
   weights: ScoringWeights,
-): Omit<GloveMatchResult, "reasons" | "tradeoffs" | "avoidIf"> & {
+): Omit<GloveMatchResult, "reasons" | "tradeoffs"> & {
   reasons: [];
   tradeoffs: [];
-  avoidIf: [];
 } {
   type SubScorer = {
     key: keyof ScoringWeights;
@@ -310,6 +366,7 @@ export function scoreGlove(
     { key: "sportSpecificFit", label: "Sport-specific fit", fn: scoreSportSpecificFit },
     { key: "fastpitchFitImportance", label: "Fastpitch-specific fit", fn: scoreFastpitchFitImportance },
     { key: "youthFriendliness", label: "Youth friendliness", fn: scoreYouthFriendliness },
+    { key: "valueFit", label: "Value for money", fn: scoreValueFit },
   ];
 
   const breakdown: ScoreBreakdownItem[] = [];
@@ -344,7 +401,6 @@ export function scoreGlove(
     breakdown,
     reasons: [],
     tradeoffs: [],
-    avoidIf: [],
   };
 }
 
@@ -376,11 +432,79 @@ export function anyGloveInBudget(
   );
 }
 
+// ─── Variant deduplication ────────────────────────────────────────────────────
+
+/**
+ * Returns a structural key that identifies the core glove model.
+ *
+ * Rule: brand + patternType + sizeInches + webType + gloveType + leatherQuality
+ *
+ * Two gloves with the same key are treated as colorway / SKU variants of the
+ * same model. The highest-scored variant surfaces in results; purchase links
+ * from all variants are merged so every buying option remains accessible.
+ *
+ * Gloves with meaningfully different specs (different web, size, or leather
+ * tier) produce different keys and always rank as distinct entries.
+ */
+function modelKey(glove: GloveProduct): string {
+  return [
+    glove.brand,
+    glove.patternType,
+    glove.sizeInches.toFixed(2),
+    glove.webType,
+    glove.gloveType,
+    glove.leatherQuality,
+  ].join("|");
+}
+
+/**
+ * Merge purchase links from variant entries into their canonical representative.
+ * Deduplicates by URL so the same link never appears twice.
+ */
+function mergeVariants(
+  scored: ReturnType<typeof scoreGlove>[],
+): ReturnType<typeof scoreGlove>[] {
+  // First pass: collect all purchase links keyed by model.
+  const linksByKey: Record<string, PurchaseLink[]> = {};
+  for (const result of scored) {
+    const key = modelKey(result.glove);
+    if (!linksByKey[key]) linksByKey[key] = [];
+    for (const link of result.glove.purchaseLinks ?? []) {
+      if (!linksByKey[key].some((l) => l.url === link.url)) {
+        linksByKey[key].push(link);
+      }
+    }
+  }
+
+  // Second pass: keep highest-scored per key (list is already sorted desc).
+  const seen = new Set<string>();
+  return scored
+    .filter((result) => {
+      const key = modelKey(result.glove);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .map((result) => {
+      const key = modelKey(result.glove);
+      const merged = linksByKey[key];
+      // Only rebuild glove object when the merged list is longer than original.
+      if (merged.length <= (result.glove.purchaseLinks?.length ?? 0)) {
+        return result;
+      }
+      return {
+        ...result,
+        glove: { ...result.glove, purchaseLinks: merged },
+      };
+    });
+}
+
 // ─── Ranker ───────────────────────────────────────────────────────────────────
 
 /**
  * Filters the catalog, scores every eligible glove, sorts descending,
- * and returns the top N results with explanations attached.
+ * deduplicates same-model variants, and returns the top N results with
+ * explanations attached.
  *
  * @param profile   Normalised user profile from profile.ts
  * @param catalog   Full combined glove catalog (all sports)
@@ -437,15 +561,20 @@ export function rankGloves(
     return budgetDistance(profile, a.glove) - budgetDistance(profile, b.glove);
   });
 
-  const top = scored.slice(0, topN);
+  // Collapse same-model variants (colorways / SKU variants) into a single entry,
+  // merging their purchase links. Freed slots are filled by the next-best distinct
+  // model, improving result diversity.
+  const deduped = mergeVariants(scored);
+
+  const top = deduped.slice(0, topN);
 
   // Attach explanations only to the top results (no wasted computation).
   return top.map((result) => {
-    const { reasons, tradeoffs, avoidIf } = generateExplanation(
+    const { reasons, tradeoffs } = generateExplanation(
       profile,
       result.glove,
       result.breakdown,
     );
-    return { ...result, reasons, tradeoffs, avoidIf };
+    return { ...result, reasons, tradeoffs };
   });
 }

@@ -4,6 +4,7 @@ import {
   ADULT_INFIELD_BASEBALL_PROFILE,
   FASTPITCH_PROFILE,
   CATCHER_PROFILE,
+  SLOWPITCH_CROSSOVER_PROFILE,
   BASEBALL_INFIELD_GLOVE,
   BASEBALL_OUTFIELD_GLOVE,
   FASTPITCH_GLOVE,
@@ -62,6 +63,38 @@ describe("hardFilter", () => {
     const result = hardFilter(ADULT_INFIELD_BASEBALL_PROFILE, FASTPITCH_GLOVE);
     expect(result.passed).toBe(false);
     expect(result.reason).toBe("wrong_sport");
+  });
+});
+
+// ─── hardFilter — baseball crossovers ────────────────────────────────────────
+
+describe("hardFilter — baseball crossover logic", () => {
+  const bbSlowpitchFriendly = { ...BASEBALL_INFIELD_GLOVE, id: "test-bb-sp-friendly", slowpitchFriendly: true };
+
+  it("passes a baseball glove with slowpitchFriendly=true for a slowpitch crossover player", () => {
+    const result = hardFilter(SLOWPITCH_CROSSOVER_PROFILE, bbSlowpitchFriendly);
+    expect(result.passed).toBe(true);
+  });
+
+  it("rejects a baseball glove with slowpitchFriendly=false even when openToCrossoverGloves=true", () => {
+    // BASEBALL_INFIELD_GLOVE has slowpitchFriendly: false
+    const result = hardFilter(SLOWPITCH_CROSSOVER_PROFILE, BASEBALL_INFIELD_GLOVE);
+    expect(result.passed).toBe(false);
+    expect(result.reason).toBe("wrong_sport");
+  });
+
+  it("rejects a baseball glove when openToCrossoverGloves=false even if slowpitchFriendly=true", () => {
+    const strictProfile = { ...SLOWPITCH_CROSSOVER_PROFILE, openToCrossoverGloves: false };
+    const result = hardFilter(strictProfile, bbSlowpitchFriendly);
+    expect(result.passed).toBe(false);
+    expect(result.reason).toBe("wrong_sport");
+  });
+
+  it("filterCatalog includes a slowpitchFriendly baseball glove when crossover is enabled", () => {
+    const mixed = [BASEBALL_INFIELD_GLOVE, bbSlowpitchFriendly, FASTPITCH_GLOVE];
+    const { eligible } = filterCatalog(SLOWPITCH_CROSSOVER_PROFILE, mixed);
+    expect(eligible.map((g) => g.id)).toContain(bbSlowpitchFriendly.id);
+    expect(eligible.map((g) => g.id)).not.toContain(BASEBALL_INFIELD_GLOVE.id);
   });
 });
 

@@ -40,6 +40,7 @@ export interface SoftFilterFlags {
   fastpitchFitMismatch: boolean; // fastpitch player, non-fastpitch glove
   slowpitchMismatch: boolean;    // slowpitch player, non-slowpitch glove
   youthMismatch: boolean;        // youth player, non-youth-friendly glove
+  crossoverBaseball: boolean;    // baseball glove surfaced as a crossover option
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -64,9 +65,22 @@ export function hardFilter(
   profile: UserProfile,
   glove: GloveProduct,
 ): HardFilterResult {
-  // 1. Sport must match exactly.
+  // 1. Sport must match exactly — unless the player opted into baseball
+  //    crossover suggestions and this glove is explicitly marked viable.
   if (glove.sport !== profile.sport) {
-    return { passed: false, reason: "wrong_sport" };
+    const isCrossover =
+      profile.openToCrossoverGloves &&
+      glove.sport === "baseball" &&
+      (profile.sport === "fastpitch" || profile.sport === "slowpitch") &&
+      (
+        // Slowpitch: accept baseball gloves that are slowpitch-friendly.
+        (profile.sport === "slowpitch" && glove.slowpitchFriendly === true) ||
+        // Fastpitch: use the original crossoverViable flag.
+        (profile.sport === "fastpitch" && glove.crossoverViable === true)
+      );
+    if (!isCrossover) {
+      return { passed: false, reason: "wrong_sport" };
+    }
   }
 
   // 2. Glove type must match the required type for the player's position.
@@ -124,10 +138,16 @@ export function softFilter(
     !glove.fastpitchFit;
 
   const slowpitchMismatch =
-    profile.sport === "slowpitch" && !glove.slowpitchFriendly;
+    profile.sport === "slowpitch" && !glove.slowpitchFriendly &&
+    glove.sport === profile.sport; // only flag native softball gloves
 
   const youthMismatch =
     profile.ageGroup === "youth" && !glove.youthFriendly;
+
+  // Baseball crossover: glove is a baseball glove surfaced for a softball player.
+  const crossoverBaseball =
+    glove.sport === "baseball" &&
+    (profile.sport === "fastpitch" || profile.sport === "slowpitch");
 
   return {
     overBudget,
@@ -137,6 +157,7 @@ export function softFilter(
     fastpitchFitMismatch,
     slowpitchMismatch,
     youthMismatch,
+    crossoverBaseball,
   };
 }
 
@@ -194,7 +215,17 @@ export function hardFilterRelaxed(
   opts: RelaxedFilterOptions = {},
 ): HardFilterResult {
   if (glove.sport !== profile.sport) {
-    return { passed: false, reason: "wrong_sport" };
+    const isCrossover =
+      profile.openToCrossoverGloves &&
+      glove.sport === "baseball" &&
+      (profile.sport === "fastpitch" || profile.sport === "slowpitch") &&
+      (
+        (profile.sport === "slowpitch" && glove.slowpitchFriendly === true) ||
+        (profile.sport === "fastpitch" && glove.crossoverViable === true)
+      );
+    if (!isCrossover) {
+      return { passed: false, reason: "wrong_sport" };
+    }
   }
 
   const required = requiredGloveType(profile.primaryPosition);

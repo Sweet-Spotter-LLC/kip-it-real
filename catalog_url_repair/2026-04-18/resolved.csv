@@ -1,0 +1,39 @@
+id,sku,brand,name,canonical_url,status,reason
+akadema-aea65-12-fastpitch,aea65-12,Akadema,,https://www.justballgloves.com/product/akadema-fastpitch-series--aea65-12-catchers-mitt/14810/?rfsn=9019128.19c2ec,fixed,matched site:search
+all star-cmw-fs-a-fastpitch,cmw-fs-a,All Star,,https://www.justballgloves.com/product/all-star-future-star-34--fastpitch-softball-catchers-mitt--cmw-fs-a/37077/?rfsn=9019128.19c2ec,fixed,matched site:search (same slug)
+shoeless-3200fpcm-fastpitch,3200fpcm,Shoeless,,https://www.justballgloves.com/product/shoeless-joe-shoeless-jane-fastpitch-softball-catchers-mitt--3200fpcm/14603/?rfsn=9019128.19c2ec,fixed,matched
+rawlngs-prodctsb-10ccb-fastpitch,prodctsb-10ccb,Rawlngs,,,review,search returned only category pages; need direct verify
+rawlings-procm33fp-24g-fastpitch,procm33fp-24g,Rawlings,,https://www.justballgloves.com/product/rawlings-heart-of-the-hide-dual-core-33--fastpitch-catchers-mitt--procm33fp-24g/34598/?rfsn=9019128.19c2ec,fixed,matched
+wilson-wbw10260033-fastpitch,wbw10260033,Wilson,,https://www.justballgloves.com/product/wilson-a1000-cm33-33--fastpitch-softball-catchers-mitt--wbw10260033/38225/?rfsn=9019128.19c2ec,fixed,matched
+mizuno-gxs90f5-fastpitch,gxs90f5,Mizuno,,https://www.justballgloves.com/product/mizuno-franchise-34--fastpitch-softball-catchers-mitt--gxs90f5/38498/?rfsn=9019128.19c2ec,fixed,matched
+easton-mywhy-thenono-fastpitch,mywhy-thenono,Easton,,https://www.justballgloves.com/product/easton-elite-series-33--fastpitch-catchers-mitt--mywhy-thenono/37869/?rfsn=9019128.19c2ec,fixed,matched
+all star-cmw-h-y-fastpitch,cmw-h-y,All Star,,https://www.justballgloves.com/product/all-star-heiress-32-5--youth-fastpitch-softball-catchers-mitt--cmw-h-y/37080/?rfsn=9019128.19c2ec,fixed,matched
+all star-cmw-h-a-fastpitch,cmw-h-a,All Star,,https://www.justballgloves.com/product/all-star-heiress-34--fastpitch-softball-catchers-mitt--cmw-h-a/37079/?rfsn=9019128.19c2ec,fixed,matched
+all star-cmw-phx-34-fastpitch,cmw-phx-34,All Star,,https://www.justballgloves.com/product/all-star-phx-34--fastpitch-softball-catchers-mitt--cmw-phx-34/37081/?rfsn=9019128.19c2ec,fixed,matched
+easton-pcfpcm34wcb-fastpitch,pcfpcm34wcb,Easton,,https://www.justballgloves.com/product/easton-professional-collection-34--fastpitch-catchers-mitt--pcfpcm34wcb/39094/?rfsn=9019128.19c2ec,fixed,matched
+easton-pcfpcm34gm-fastpitch,pcfpcm34gm,Easton,,https://www.justballgloves.com/product/easton-professional-collection-colorsplash-2-0-34--fastpitch-softball-catchers-mitt--pcfpcm34gm/38551/?rfsn=9019128.19c2ec,fixed,matched
+easton-rudi2020-fastpitch,rudi2020,Easton,,https://www.justballgloves.com/product/easton-professional-collection-jen-schroeder-34--fastpitch-catchers-mitt--rudi2020/34200/?rfsn=9019128.19c2ec,fixed,matched
+easton-rudi-fastpitch,rudi,Easton,,https://www.justballgloves.com/product/easton-professional-collection-34--fastpitch-softball-catchers-mitt--rudi/37916/?rfsn=9019128.19c2ec,fixed,matched (RUDI current)
+easton-pcfp13-10wcb-fastpitch,pcfp13-10wcb,Easton,,,review,search returned PCFP13-10T (different variant) not exact SKU
+easton-mywhy-2025-fastpitch,mywhy-2025,Easton,,https://www.justballgloves.com/product/easton-elite-11-5--fastpitch-softball-glove--mywhy-2025/39081/?rfsn=9019128.19c2ec,fixed,matched
+easton-pcfp115-fastpitch,pcfp115,Easton,,https://www.justballgloves.com/product/easton-professional-collection-11-5--fastpitch-softball-glove--pcfp115/34168/?rfsn=9019128.19c2ec,fixed,matched
+easton-pcfp1150-2wg-fastpitch,pcfp1150-2wg,Easton,,,review,search returned only category pages; no exact product URL
+easton-pcfp120-15c-fastpitch,pcfp120-15c,Easton,,https://www.justballgloves.com/product/easton-professional-collection-colorsplash-2-0-12--fastpitch-softball-glove--pcfp120-15c/38541/?rfsn=9019128.19c2ec,fixed,matched
+easton-pcfp120-15gm-fastpitch,pcfp120-15gm,Easton,,https://www.justballgloves.com/product/easton-professional-collection-colorsplash-2-0-12--fastpitch-softball-glove--pcfp120-15gm/38542/?rfsn=9019128.19c2ec,fixed,matched
+easton-pcfp120-15wcbp-fastpitch,pcfp120-15wcbp,Easton,,,review,no exact product URL; only similar variants
+easton-fmfp12-fastpitch,fmfp12,Easton,,https://www.justballgloves.com/product/easton-fundamental-12--fastpitch-softball-glove--fmfp12/35285/?rfsn=9019128.19c2ec,fixed,matched
+easton-pcfp120-3wg-fastpitch,pcfp120-3wg,Easton,,https://www.justballgloves.com/product/easton-professional-collection-12--fastpitch-softball-glove--pcfp120-3wg/39090/?rfsn=9019128.19c2ec,fixed,matched
+easton-pcfp715-2c-fastpitch,pcfp715-2c,Easton,,,review,"search returned PCFP715-2WCBP variant, not exact SKU"
+easton-pcfp715-2gm-fastpitch,pcfp715-2gm,Easton,,https://www.justballgloves.com/product/easton-professional-collection-colorsplash-2-0-11-75--fastpitch-softball-glove--pcfp715-2gm/38548/?rfsn=9019128.19c2ec,fixed,matched
+easton-fmfp13-fastpitch,fmfp13,Easton,,https://www.justballgloves.com/product/easton-fundamental-13--fastpitch-first-base-mitt--fmfp13/35287/?rfsn=9019128.19c2ec,fixed,matched
+easton-pcfp130-6wg-fastpitch,pcfp130-6wg,Easton,,https://www.justballgloves.com/product/easton-professional-collection-13--fastpitch-softball-glove--pcfp130-6wg/39093/?rfsn=9019128.19c2ec,fixed,matched
+easton-pcfp125-3wr-fastpitch,pcfp125-3wr,Easton,,,review,no exact product URL returned
+easton-pcfp125-3gm-fastpitch,pcfp125-3gm,Easton,,https://www.justballgloves.com/product/easton-professional-collection-colorsplash-2-0-12-5--fastpitch-softball-glove--pcfp125-3gm/38545/?rfsn=9019128.19c2ec,fixed,matched
+marucci-mfgasfp240c2-fastpitch,mfgasfp240c2,Marucci,,,review,no exact product URL
+marucci-mfgcdfp33-fastpitch,mfgcdfp33,Marucci,,,review,no exact product URL
+marucci-mfgcyfp250c2-fastpitch,mfgcyfp250c2,Marucci,,,review,no exact product URL
+marucci-mfgox230c2fp-tf-fastpitch,mfgox230c2fp-tf,Marucci,,https://www.justballgloves.com/product/marucci-oxbow-33--fastpitch-softball-catchers-mitt--mfgox230c2fp-tf/38104/?rfsn=9019128.19c2ec,fixed,matched
+marucci-mfgasfp39s2-fastpitch,mfgasfp39s2,Marucci,,,review,no exact product URL
+marucci-mfgcyfp39s1-fastpitch,mfgcyfp39s1,Marucci,,,review,no exact product URL
+marucci-mfgox37s1fp-tf-fastpitch,mfgox37s1fp-tf,Marucci,,,review,no exact product URL
+marucci-mfgasfp44a2-fastpitch,mfgasfp44a2,Marucci,,,review,no exact product URL

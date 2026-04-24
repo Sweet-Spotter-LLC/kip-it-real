@@ -104,13 +104,23 @@ function normaliseSecondaryPosition(
 export function buildUserProfile(answers: QuizAnswers): UserProfile {
   const gloveTypeNeeded = gloveTypeForPosition(answers.primaryPosition);
 
+  // Slowpitch skips the age question — default to adult.
+  const ageGroup: "youth" | "teen" | "adult" = answers.ageGroup ?? "adult";
+
+  // Infer versatility preference from position choices: utility players and
+  // anyone covering a second position implicitly want a versatile glove.
+  // This replaces the removed "Should it play multiple positions?" question.
+  const secondaryPos = normaliseSecondaryPosition(answers.secondaryPosition);
+  const wantsVersatility =
+    answers.primaryPosition === "utility" || secondaryPos !== undefined;
+
   const rec = recommendSize({
     sport: answers.sport,
-    ageGroup: answers.ageGroup,
+    ageGroup,
     primaryPosition: answers.primaryPosition,
     experienceLevel: answers.experienceLevel,
     fastpitchFitImportant: answers.fastpitchFitImportant,
-    wantsVersatility: answers.wantsVersatility,
+    wantsVersatility,
   });
 
   // Budget handling:
@@ -139,12 +149,21 @@ export function buildUserProfile(answers: QuizAnswers): UserProfile {
       ? answers.preferredBrands
       : undefined;
 
+  // Preferred-size override: when the player explicitly selected a specific
+  // size, tighten the window to ±0.25" around their choice so scoring rewards
+  // gloves closest to what they asked for. "any" and undefined both mean
+  // "let the algorithm decide" — the recommendSize output is used unchanged.
+  const preferred =
+    typeof answers.preferredSizeInches === "number"
+      ? answers.preferredSizeInches
+      : undefined;
+
   return {
     sport: answers.sport,
-    ageGroup: answers.ageGroup,
+    ageGroup,
     throwHand: answers.throwHand,
     primaryPosition: answers.primaryPosition,
-    secondaryPosition: normaliseSecondaryPosition(answers.secondaryPosition),
+    secondaryPosition: secondaryPos,
     gloveTypeNeeded,
     experienceLevel: answers.experienceLevel,
     playFrequency: answers.playFrequency,
@@ -160,16 +179,19 @@ export function buildUserProfile(answers: QuizAnswers): UserProfile {
         : answers.webPreference,
     budgetMin,
     budgetMax,
-    wantsVersatility: Boolean(answers.wantsVersatility),
-    wantsFastClose: Boolean(answers.wantsFastClose),
+    wantsVersatility,
     wantsPremiumLeather: Boolean(answers.wantsPremiumLeather),
     fastpitchFitImportant:
       answers.sport === "fastpitch"
         ? Boolean(answers.fastpitchFitImportant)
         : false,
+    openToCrossoverGloves:
+      answers.sport === "fastpitch" || answers.sport === "slowpitch"
+        ? Boolean(answers.openToCrossoverGloves)
+        : false,
     preferredBrands,
-    recommendedSizeMin: rec.min,
-    recommendedSizeMax: rec.max,
+    recommendedSizeMin: preferred !== undefined ? preferred - 0.25 : rec.min,
+    recommendedSizeMax: preferred !== undefined ? preferred + 0.25 : rec.max,
   };
 }
 

@@ -34,7 +34,7 @@ function upsertToLocal(updated: GloveProduct) {
 }
 
 interface RouteContext {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }
 
 /**
@@ -45,8 +45,9 @@ export async function GET(req: Request, { params }: RouteContext) {
   const denied = requireAdmin(req);
   if (denied) return denied;
 
+  const { id } = await params;
   const catalog = await loadCatalog({ includeDrafts: true });
-  const glove = catalog.find((g) => g.id === params.id);
+  const glove = catalog.find((g) => g.id === id);
   if (!glove) {
     return NextResponse.json({ error: "Glove not found" }, { status: 404 });
   }
@@ -61,12 +62,13 @@ export async function PUT(req: Request, { params }: RouteContext) {
   const denied = requireAdmin(req);
   if (denied) return denied;
 
+  const { id } = await params;
   const raw = await req.json();
 
   // Force the id to match the URL param.
   const normalised = {
     ...raw,
-    id: params.id,
+    id,
     positionTags:
       typeof raw.positionTags === "string"
         ? raw.positionTags
@@ -98,11 +100,12 @@ export async function PATCH(req: Request, { params }: RouteContext) {
   const denied = requireAdmin(req);
   if (denied) return denied;
 
+  const { id } = await params;
   const patch = await req.json();
 
   // Find existing glove across full catalog (including sport files).
   const catalog = await loadCatalog({ includeDrafts: true });
-  const existing = catalog.find((g) => g.id === params.id);
+  const existing = catalog.find((g) => g.id === id);
   if (!existing) {
     return NextResponse.json({ error: "Glove not found" }, { status: 404 });
   }

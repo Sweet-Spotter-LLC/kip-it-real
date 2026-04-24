@@ -9,11 +9,102 @@
  *
  * The sheet URL is read from the SHEETS_CATALOG_URL env var, or falls back
  * to the hard-coded published URL in sheetsSync.ts.
+ *
+ * Monitoring: set CATALOG_ALERT_WEBHOOK_URL (Slack incoming webhook or any
+ * HTTP POST endpoint) to receive an alert whenever the live Sheets fetch
+ * falls back to the limited local JSON files.
  */
 
+import fs from "fs";
+import path from "path";
 import { getCatalogUrl, parseCsv } from "./sheetsSync";
 import { validateBatch } from "./validation";
 import type { GloveProduct, SportType } from "../glove/types";
+
+// ─── Local JSON fallback ──────────────────────────────────────────────────────
+
+const DATA_DIR = path.join(process.cwd(), "data", "gloves");
+
+/**
+ * Reads the sport-specific JSON files from disk as a fallback when the Sheets
+ * fetch fails or returns no results. The JSON files are the last-synced copy
+ * of the catalog — stale is better than empty.
+ */
+function loadFromLocalJson(
+  sport?: SportType,
+  includeDrafts = false,
+): GloveProduct[] {
+  const sports: SportType[] = sport
+    ? [sport]
+    : ["baseball", "fastpitch", "slowpitch"];
+  const results: GloveProduct[] = [];
+
+  for (const s of sports) {
+    const filePath = path.join(DATA_DIR, `${s}.json`);
+    try {
+      const raw = JSON.parse(
+        fs.readFileSync(filePath, "utf-8"),
+      ) as GloveProduct[];
+      const filtered = includeDrafts
+        ? raw
+        : raw.filter((g) => g.status === "published");
+      results.push(...filtered);
+    } catch {
+      // File may not exist for this sport yet — skip silently.
+    }
+  }
+
+  return results;
+}
+
+// ─── Monitoring ───────────────────────────────────────────────────────────────
+
+/**
+ * Posts a structured alert to CATALOG_ALERT_WEBHOOK_URL when the live Sheets
+ * fetch falls back to limited local data. Compatible with Slack incoming
+ * webhooks, Discord webhooks (via adapter), Make, Zapier, or any service that
+ * accepts a JSON POST.
+ *
+ * Non-blocking — a failure here must never prevent catalog results from loading.
+ */
+async function alertFallback(opts: {
+  reason: string;
+  rowsParsed: number;
+  rowsValid: number;
+  fallbackCount: number;
+  sheetUrl: string;
+  sampleErrors: string[];
+}): Promise<void> {
+  const webhookUrl = process.env.CATALOG_ALERT_WEBHOOK_URL;
+  if (!webhookUrl) return;
+
+  const lines = [
+    `⚠️ *Kip It Real catalog alert* — serving limited local fallback`,
+    `Reason: ${opts.reason}`,
+    `Rows parsed from Sheets: ${opts.rowsParsed}`,
+    `Rows that passed validation: ${opts.rowsValid}`,
+    `Fallback catalog size: ${opts.fallbackCount} gloves`,
+    opts.sampleErrors.length > 0
+      ? `Sample validation errors:\n${opts.sampleErrors.map((e) => `  • ${e}`).join("\n")}`
+      : "",
+    `Sheet URL: ${opts.sheetUrl}`,
+    `Time: ${new Date().toISOString()}`,
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  try {
+    await fetch(webhookUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: lines }),
+      // @ts-ignore – Next.js fetch option
+      next: { revalidate: 0 },
+    });
+  } catch (err) {
+    console.error("[catalog] Failed to post alert webhook:", err);
+  }
+}
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
@@ -41,7 +132,9 @@ export async function loadCatalog(
   const url = getCatalogUrl();
 
   // ── 1. Fetch with Next.js ISR caching (revalidate every 5 min) ──────────
-  let csvText: string;
+  let csvText: string | null = null;
+  let fetchError: string | null = null;
+
   try {
     const res = await fetch(url, {
       // Next.js extends fetch() to support cache revalidation.
@@ -50,30 +143,84 @@ export async function loadCatalog(
       next: { revalidate: 300 },
     });
     if (!res.ok) {
-      console.error(`[catalog] HTTP ${res.status} fetching catalog CSV — returning empty catalog`);
-      return [];
+      fetchError = `HTTP ${res.status} ${res.statusText}`;
+      console.error(`[catalog] ${fetchError} fetching catalog CSV — will fall back`);
+    } else {
+      const text = await res.text();
+      // Sanity check: Google sometimes returns an HTML error page with 200.
+      if (text.trimStart().startsWith("<")) {
+        fetchError = "Response was HTML (not CSV) — possible Sheets auth or quota issue";
+        console.error(`[catalog] ${fetchError}`);
+      } else {
+        csvText = text;
+      }
     }
-    csvText = await res.text();
   } catch (err) {
-    console.error("[catalog] Failed to fetch catalog CSV:", err);
-    return [];
+    fetchError = (err as Error).message;
+    console.error("[catalog] Network error fetching catalog CSV:", fetchError);
   }
 
-  // ── 2. Parse CSV ─────────────────────────────────────────────────────────
-  const rows = parseCsv(csvText);
+  // ── 2. Parse + validate (only when Sheets returned usable data) ───────────
+  let gloves: GloveProduct[] = [];
+  let rowsParsed = 0;
+  let rowsValid = 0;
+  let sampleErrors: string[] = [];
 
-  // ── 3. Validate ──────────────────────────────────────────────────────────
-  const { valid } = validateBatch(rows);
+  if (csvText) {
+    const rows = parseCsv(csvText);
+    rowsParsed = rows.length;
 
-  // ── 4. Filter ────────────────────────────────────────────────────────────
-  let gloves = valid;
+    const { valid, invalid } = validateBatch(rows);
+    rowsValid = valid.length;
 
-  if (!includeDrafts) {
-    gloves = gloves.filter((g) => g.status === "published");
+    console.log(
+      `[catalog] Sheets CSV: ${rowsParsed} rows parsed, ` +
+      `${rowsValid} valid, ${invalid.length} invalid`,
+    );
+
+    if (invalid.length > 0) {
+      // Log first few errors so the dev log reveals schema mismatches quickly.
+      sampleErrors = invalid.slice(0, 5).map(
+        (i) => `row ${i.rowIndex} (${i.raw.id ?? "?"}): ${i.errors.slice(0, 2).join("; ")}`,
+      );
+      console.warn("[catalog] Sample validation errors:", sampleErrors.join(" | "));
+    }
+
+    gloves = includeDrafts
+      ? valid
+      : valid.filter((g) => g.status === "published");
+
+    if (sport) {
+      gloves = gloves.filter((g) => g.sport === sport);
+    }
   }
 
-  if (sport) {
-    gloves = gloves.filter((g) => g.sport === sport);
+  // ── 3. Fall back to local JSON when Sheets returned nothing valid ─────────
+  if (gloves.length === 0) {
+    const fallback = loadFromLocalJson(sport, includeDrafts);
+
+    const reason = fetchError
+      ? `Sheets fetch failed: ${fetchError}`
+      : rowsParsed === 0
+      ? "CSV parsed to 0 rows (empty sheet or URL issue)"
+      : `All ${rowsParsed} rows failed validation — possible schema mismatch`;
+
+    console.error(
+      `[catalog] ⚠ FALLING BACK to local JSON (${fallback.length} gloves). ` +
+      `Reason: ${reason}`,
+    );
+
+    // Fire-and-forget alert to the admin webhook.
+    void alertFallback({
+      reason,
+      rowsParsed,
+      rowsValid,
+      fallbackCount: fallback.length,
+      sheetUrl: url,
+      sampleErrors,
+    });
+
+    return fallback;
   }
 
   return gloves;

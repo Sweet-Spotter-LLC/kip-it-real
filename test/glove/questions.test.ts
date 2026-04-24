@@ -89,46 +89,66 @@ describe("Web-option filtering by position", () => {
   });
 });
 
-describe("Fast-close question gating", () => {
-  const base: Partial<QuizAnswers> = {
-    sport: "baseball",
-    primaryPosition: "infield",
-  };
-
-  it("is visible for infield", () => {
-    const visible = getVisibleQuestions({ ...base, primaryPosition: "infield" });
-    expect(visible.some((q) => q.id === "wantsFastClose")).toBe(true);
+describe("Preferred size question", () => {
+  it("is visible when sport and primaryPosition (non-catcher) are set", () => {
+    const visible = getVisibleQuestions({ sport: "baseball", primaryPosition: "infield" });
+    expect(visible.some((q) => q.id === "preferredSizeInches")).toBe(true);
   });
 
-  it("is visible for utility", () => {
-    const visible = getVisibleQuestions({
-      ...base,
-      primaryPosition: "utility",
+  it("is hidden when primaryPosition is not yet answered", () => {
+    const visible = getVisibleQuestions({ sport: "baseball" });
+    expect(visible.some((q) => q.id === "preferredSizeInches")).toBe(false);
+  });
+
+  it("is hidden for catchers (circumference sizing)", () => {
+    const visible = getVisibleQuestions({ sport: "baseball", primaryPosition: "catcher" });
+    expect(visible.some((q) => q.id === "preferredSizeInches")).toBe(false);
+  });
+
+  it("is visible for first_base players", () => {
+    const visible = getVisibleQuestions({ sport: "baseball", primaryPosition: "first_base" });
+    expect(visible.some((q) => q.id === "preferredSizeInches")).toBe(true);
+  });
+
+  it("generates size options in 0.5\" increments with 'Choose for me' first", () => {
+    const q = QUIZ_QUESTIONS.find((q) => q.id === "preferredSizeInches")!;
+    const opts = resolveQuestionOptions(q, {
+      sport: "baseball",
+      primaryPosition: "infield",
+      ageGroup: "adult",
     });
-    expect(visible.some((q) => q.id === "wantsFastClose")).toBe(true);
-  });
-
-  it("is hidden for outfield", () => {
-    const visible = getVisibleQuestions({
-      ...base,
-      primaryPosition: "outfield",
-    });
-    expect(visible.some((q) => q.id === "wantsFastClose")).toBe(false);
-  });
-
-  it("is hidden for pitcher", () => {
-    const visible = getVisibleQuestions({
-      ...base,
-      primaryPosition: "pitcher",
-    });
-    expect(visible.some((q) => q.id === "wantsFastClose")).toBe(false);
-  });
-
-  it("is hidden for catcher and first base (via mitt short-circuit)", () => {
-    for (const pos of ["catcher", "first_base"] as const) {
-      const visible = getVisibleQuestions({ ...base, primaryPosition: pos });
-      expect(visible.some((q) => q.id === "wantsFastClose")).toBe(false);
+    expect(opts).toBeDefined();
+    expect(opts![0].value).toBe("any");
+    expect(opts![0].label).toBe("Choose for me");
+    // All subsequent options should be numbers in 0.5" steps
+    const sizes = opts!.slice(1).map((o) => o.value as number);
+    for (let i = 1; i < sizes.length; i++) {
+      expect(sizes[i] - sizes[i - 1]).toBeCloseTo(0.5);
     }
+  });
+
+  it("widens option range when player plays two positions", () => {
+    const q = QUIZ_QUESTIONS.find((q) => q.id === "preferredSizeInches")!;
+    const single = resolveQuestionOptions(q, {
+      sport: "baseball",
+      primaryPosition: "infield",
+      ageGroup: "adult",
+    });
+    const dual = resolveQuestionOptions(q, {
+      sport: "baseball",
+      primaryPosition: "infield",
+      secondaryPosition: "outfield",
+      ageGroup: "adult",
+    });
+    expect(dual!.length).toBeGreaterThan(single!.length);
+  });
+
+  it("comes before experienceLevel in the visible question order", () => {
+    const visible = getVisibleQuestions({ sport: "baseball", primaryPosition: "infield" });
+    const sizeIdx = visible.findIndex((q) => q.id === "preferredSizeInches");
+    const expIdx = visible.findIndex((q) => q.id === "experienceLevel");
+    expect(sizeIdx).toBeGreaterThan(-1);
+    expect(sizeIdx).toBeLessThan(expIdx);
   });
 });
 

@@ -17,11 +17,10 @@ interface GloveCardProps {
  *  3. Key attribute badges
  *  4. Why this matches you
  *  5. Tradeoffs
- *  6. Who should avoid
- *  7. Actions (details + purchase links)
+ *  6. Actions (details + purchase links)
  */
 export function GloveCard({ match, rank }: GloveCardProps) {
-  const { glove, score, reasons, tradeoffs, avoidIf } = match;
+  const { glove, score, reasons, tradeoffs } = match;
   const webMeta = WEB_TYPE_META[glove.webType];
   const qualitative = qualitativeFor({
     leatherQuality: glove.leatherQuality,
@@ -93,11 +92,6 @@ export function GloveCard({ match, rank }: GloveCardProps) {
         heading="Tradeoffs"
         items={tradeoffs}
         accent="support"
-      />
-      <ExplanationBlock
-        heading="Who should avoid this"
-        items={avoidIf}
-        accent="accent"
       />
 
       {/* ── Footer actions ─────────────────────────────────────────── */}

@@ -37,14 +37,10 @@ export function QuizContainer() {
   const [stepIndex, setStepIndex] = useState(0);
   const [submitting, setSubmitting] = useState(false);
 
-  // Guard so auto-advance only fires once per answer change.
+  // Guard so auto-advance only fires once per (question, value, step) tuple.
+  // Cleared in goBack() so re-selecting the same answer after going back
+  // always produces a fresh advance, even if the value hasn't changed.
   const lastAdvancedKeyRef = useRef<string>("");
-
-  // Suppression flag set when the user explicitly clicks Back — prevents the
-  // auto-advance effect from immediately ricocheting forward again because
-  // the previous step's answer is still populated. Cleared on the next user
-  // interaction (selecting a different answer).
-  const suppressAdvanceRef = useRef(false);
 
   // Recompute visible questions on every render — branching happens here.
   const visibleQuestions = useMemo(
@@ -63,10 +59,6 @@ export function QuizContainer() {
 
   // ── Answer setter ────────────────────────────────────────────────────────
   function setAnswer(key: keyof QuizAnswers, value: unknown) {
-    // Any new selection clears the back-suppression — selecting an answer is
-    // an intentional forward action.
-    suppressAdvanceRef.current = false;
-
     setAnswers((prev) => {
       const next: Partial<QuizAnswers> = { ...prev, [key]: value } as Partial<QuizAnswers>;
 
@@ -91,8 +83,32 @@ export function QuizContainer() {
 
   // ── Navigation ──────────────────────────────────────────────────────────
   function goBack() {
-    suppressAdvanceRef.current = true;
-    setStepIndex((i) => Math.max(0, i - 1));
+    const prevIndex = Math.max(0, stepIndex - 1);
+    if (prevIndex === stepIndex) return; // already at step 0
+
+    const prevQuestion = visibleQuestions[prevIndex];
+
+    // Reset the advance-key guard so that re-selecting the same answer on
+    // the previous question always triggers a fresh auto-advance, even if
+    // the value is identical to what the user chose the first time.
+    lastAdvancedKeyRef.current = "";
+
+    // Clear the answer for the question we're returning to so the user
+    // must actively re-answer it — avoids leaving a stale locked answer.
+    if (prevQuestion) {
+      setAnswers((a) => {
+        const next = { ...a };
+        const key = prevQuestion.id as keyof QuizAnswers;
+        delete next[key];
+        // If going back to the premium-leather fork, also clear its side effects.
+        if (key === "wantsPremiumLeather") {
+          delete next.budgetSkipped;
+        }
+        return next;
+      });
+    }
+
+    setStepIndex(prevIndex);
   }
 
   async function submitAnswers(overrides?: Partial<QuizAnswers>) {
@@ -122,20 +138,10 @@ export function QuizContainer() {
     // Brand picker is multi-select — never auto-advance.
     if (current.type === "brand_picker") return;
 
-    // Build a stable key so we only auto-advance once per (question, value).
+    // Build a stable key so we only auto-advance once per (question, value, step).
+    // goBack() resets this to "" so the guard never blocks re-selection of the
+    // same answer after navigating back.
     const advanceKey = `${current.id}:${JSON.stringify(answerForCurrent)}:${stepIndex}`;
-
-    // If the user just clicked Back, the previous step's answer is still in
-    // state — without this guard the effect would treat that as a fresh
-    // selection and immediately fire the timer to push them forward again.
-    // Record the current key as "already advanced" so subsequent renders stay
-    // idempotent until the user makes a new selection (which clears the
-    // suppression flag in setAnswer()).
-    if (suppressAdvanceRef.current) {
-      lastAdvancedKeyRef.current = advanceKey;
-      suppressAdvanceRef.current = false;
-      return;
-    }
 
     if (lastAdvancedKeyRef.current === advanceKey) return;
     lastAdvancedKeyRef.current = advanceKey;
@@ -168,7 +174,6 @@ export function QuizContainer() {
     }, 280);
 
     return () => clearTimeout(timer);
-    // submitAnswers depends on `answers` so the effect deps already cover it.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [answers, current, stepIndex, visibleQuestions]);
 

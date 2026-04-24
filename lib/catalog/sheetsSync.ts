@@ -192,15 +192,27 @@ export function parseCsv(text: string): Record<string, unknown>[] {
 
 // ─── File writer ──────────────────────────────────────────────────────────────
 
-function writeSportFile(sport: string, gloves: GloveProduct[]): void {
+function writeSportFile(sport: string, gloves: GloveProduct[]): boolean {
   const filePath = SPORT_FILES[sport];
   if (!filePath) {
     console.warn(`[sheetsSync] Unknown sport "${sport}" — skipping write`);
-    return;
+    return false;
   }
-  fs.mkdirSync(path.dirname(filePath), { recursive: true });
-  fs.writeFileSync(filePath, JSON.stringify(gloves, null, 2), "utf-8");
-  console.log(`[sheetsSync] Wrote ${gloves.length} ${sport} gloves → ${filePath}`);
+  try {
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    fs.writeFileSync(filePath, JSON.stringify(gloves, null, 2), "utf-8");
+    console.log(`[sheetsSync] Wrote ${gloves.length} ${sport} gloves → ${filePath}`);
+    return true;
+  } catch (err) {
+    // Vercel and other read-only deployment environments cannot write to the
+    // project directory. The sync report still returns the correct row counts
+    // from Sheets — only the local JSON fallback update is skipped.
+    console.warn(
+      `[sheetsSync] Could not write ${filePath} (read-only filesystem): ` +
+      `${(err as Error).message}`,
+    );
+    return false;
+  }
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────
@@ -223,6 +235,13 @@ export interface SyncReport {
   }>;
   bySport: Record<string, number>;
   timestamp: string;
+  /**
+   * True when at least one sport JSON file was successfully written to disk.
+   * False on Vercel (read-only filesystem) or if there were no valid gloves.
+   * When false, the import still succeeded — the live catalog is served
+   * directly from Sheets at runtime; only the local fallback is not updated.
+   */
+  filesWritten: boolean;
 }
 
 /**
@@ -277,9 +296,11 @@ export async function syncFromSheets(
     }
   }
 
+  let filesWritten = false;
   for (const [sport, gloves] of Object.entries(bySport)) {
     if (gloves.length > 0) {
-      writeSportFile(sport, gloves);
+      const wrote = writeSportFile(sport, gloves);
+      if (wrote) filesWritten = true;
     }
   }
 
@@ -300,5 +321,6 @@ export async function syncFromSheets(
     })),
     bySport: bySportCount,
     timestamp: new Date().toISOString(),
+    filesWritten,
   };
 }

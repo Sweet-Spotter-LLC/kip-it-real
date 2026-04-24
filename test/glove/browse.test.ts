@@ -3,6 +3,7 @@ import {
   matchesBrowseFilters,
   sortBrowseGloves,
   uniqueBrands,
+  uniqueSeries,
   priceBounds,
 } from "@/lib/glove/browse";
 import {
@@ -113,6 +114,69 @@ describe("uniqueBrands", () => {
     const copy = [...brands].sort((a, b) => a.localeCompare(b));
     expect(brands).toEqual(copy);
     expect(new Set(brands).size).toBe(brands.length);
+  });
+});
+
+describe("matchesBrowseFilters — series", () => {
+  const gloveWithSeries = { ...BASEBALL_INFIELD_GLOVE, series: "A2000" };
+  const gloveNoSeries = { ...BASEBALL_INFIELD_GLOVE, series: undefined };
+
+  it("series filter 'all' passes all gloves", () => {
+    expect(matchesBrowseFilters(gloveWithSeries, { series: "all" })).toBe(true);
+    expect(matchesBrowseFilters(gloveNoSeries, { series: "all" })).toBe(true);
+  });
+
+  it("series filter matches a glove with the matching series", () => {
+    expect(matchesBrowseFilters(gloveWithSeries, { series: "A2000" })).toBe(true);
+  });
+
+  it("series filter excludes a glove with a different series", () => {
+    expect(matchesBrowseFilters(gloveWithSeries, { series: "R9" })).toBe(false);
+  });
+
+  it("series filter excludes a glove with no series field", () => {
+    expect(matchesBrowseFilters(gloveNoSeries, { series: "A2000" })).toBe(false);
+  });
+
+  it("absent series filter is a no-op", () => {
+    expect(matchesBrowseFilters(gloveWithSeries, {})).toBe(true);
+    expect(matchesBrowseFilters(gloveNoSeries, {})).toBe(true);
+  });
+});
+
+describe("uniqueSeries", () => {
+  it("returns unique series names sorted alphabetically", () => {
+    const gloves = [
+      { ...BASEBALL_INFIELD_GLOVE, series: "Pro Preferred" },
+      { ...BASEBALL_INFIELD_GLOVE, series: "A2000" },
+      { ...BASEBALL_INFIELD_GLOVE, series: "A2000" }, // duplicate
+      { ...BASEBALL_INFIELD_GLOVE, series: undefined }, // no series
+    ];
+    const result = uniqueSeries(gloves);
+    expect(result).toEqual(["A2000", "Pro Preferred"]);
+  });
+
+  it("excludes gloves without a series", () => {
+    const gloves = [
+      { ...BASEBALL_INFIELD_GLOVE, series: undefined },
+      { ...BASEBALL_INFIELD_GLOVE, series: undefined },
+    ];
+    expect(uniqueSeries(gloves)).toEqual([]);
+  });
+
+  it("returns empty array for an empty catalog", () => {
+    expect(uniqueSeries([])).toEqual([]);
+  });
+
+  it("is sorted alphabetically", () => {
+    const gloves = [
+      { ...BASEBALL_INFIELD_GLOVE, series: "R9" },
+      { ...BASEBALL_INFIELD_GLOVE, series: "A2000" },
+      { ...BASEBALL_INFIELD_GLOVE, series: "Heart of the Hide" },
+    ];
+    const result = uniqueSeries(gloves);
+    const sorted = [...result].sort((a, b) => a.localeCompare(b));
+    expect(result).toEqual(sorted);
   });
 });
 

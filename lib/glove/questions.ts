@@ -8,7 +8,7 @@
  *  - Baseball, Fastpitch, and Slowpitch do not ask identical question sets.
  *  - Catcher / First Base short-circuit web + pocket questions (mitt-specific).
  *  - Fastpitch asks `fastpitchFitImportant` (hand-opening emphasis).
- *  - Slowpitch asks `wantsVersatility` (bigger pocket / utility bias).
+ *  - Versatility preference is inferred from position choices (not asked).
  *  - Fast-close is only relevant for Infield / Utility (skipped elsewhere).
  *  - Web options are filtered to those compatible with the player's
  *    primary (and secondary) position, with explicit "[Position Only]"
@@ -30,6 +30,7 @@ import {
   WEB_TYPE_META,
   WEBS_BY_POSITION,
 } from "./constants";
+import { getSizeOptionsRange } from "./sizing";
 
 // ─── Web option builder ───────────────────────────────────────────────────────
 
@@ -89,6 +90,57 @@ function buildWebOptions(
   return opts;
 }
 
+// ─── Size option builder ──────────────────────────────────────────────────────
+
+/**
+ * Generates size-picker options in 0.5" increments for the player's
+ * sport + position(s) + age group. The union of all position ranges is
+ * used so a utility/dual-role player sees the full span they might need.
+ *
+ * "Choose for me" (value: "any") is always the first option and preserves
+ * the algorithm's default size recommendation when selected.
+ *
+ * Returns undefined when context is insufficient to build meaningful options
+ * (no sport, no primaryPosition, or a catcher primary — catchers use
+ * circumference sizing which lives on a different scale).
+ */
+function buildSizeOptions(
+  answers: Partial<QuizAnswers>,
+): QuizQuestionOption[] | undefined {
+  const { sport, primaryPosition, secondaryPosition, ageGroup } = answers;
+  if (!sport || !primaryPosition || primaryPosition === "catcher") return undefined;
+
+  const secondary: PositionType | undefined =
+    secondaryPosition && secondaryPosition !== "none" ? secondaryPosition : undefined;
+
+  const positions: PositionType[] = [primaryPosition];
+  if (secondary) positions.push(secondary);
+
+  const age: "youth" | "teen" | "adult" = ageGroup ?? "adult";
+  const range = getSizeOptionsRange(sport, positions, age);
+  if (!range) return undefined;
+
+  // Expand to the nearest 0.5" boundary on each end so options are clean.
+  const startInch = Math.floor(range.min * 2) / 2;
+  const endInch = Math.ceil(range.max * 2) / 2;
+  const steps = Math.round((endInch - startInch) / 0.5);
+
+  const opts: QuizQuestionOption[] = [
+    {
+      label: "Choose for me",
+      value: "any",
+      hint: "We'll match the best size for your position and playing style.",
+    },
+  ];
+
+  for (let i = 0; i <= steps; i++) {
+    const size = Math.round((startInch + i * 0.5) * 10) / 10;
+    opts.push({ label: `${size}"`, value: size });
+  }
+
+  return opts;
+}
+
 // ─── Question list ────────────────────────────────────────────────────────────
 
 export const QUIZ_QUESTIONS: QuizQuestion[] = [
@@ -107,6 +159,8 @@ export const QUIZ_QUESTIONS: QuizQuestion[] = [
   },
 
   // ── Step 2: Age group ─────────────────────────────────────────────────────
+  // Slowpitch is always 18+ adult league — skip this question for slowpitch
+  // and let profile.ts default to "adult".
   {
     id: "ageGroup",
     step: 2,
@@ -118,6 +172,7 @@ export const QUIZ_QUESTIONS: QuizQuestion[] = [
       { label: "Teen (13 to 17)", value: "teen" },
       { label: "Adult (18+)", value: "adult" },
     ],
+    showIf: (a) => a.sport !== "slowpitch",
   },
 
   // ── Step 3: Throw hand ────────────────────────────────────────────────────
@@ -134,6 +189,7 @@ export const QUIZ_QUESTIONS: QuizQuestion[] = [
   },
 
   // ── Step 4: Primary position ──────────────────────────────────────────────
+  // Catcher is not a slowpitch position — filter it out dynamically.
   {
     id: "primaryPosition",
     step: 4,
@@ -148,6 +204,19 @@ export const QUIZ_QUESTIONS: QuizQuestion[] = [
       { label: "First base", value: "first_base" },
       { label: "Utility / multiple spots", value: "utility" },
     ],
+    getOptions: (answers) => {
+      const base = [
+        { label: "Infield", value: "infield" },
+        { label: "Outfield", value: "outfield" },
+        { label: "Pitcher", value: "pitcher" },
+        ...(answers.sport !== "slowpitch"
+          ? [{ label: "Catcher", value: "catcher" }]
+          : []),
+        { label: "First base", value: "first_base" },
+        { label: "Utility / multiple spots", value: "utility" },
+      ];
+      return base;
+    },
   },
 
   // ── Step 5: Secondary position (only if utility-leaning) ─────────────────
@@ -167,6 +236,30 @@ export const QUIZ_QUESTIONS: QuizQuestion[] = [
     // Catchers and 1B use specialized mitts — skip dual-role logic.
     showIf: (a) =>
       a.primaryPosition !== "catcher" && a.primaryPosition !== "first_base",
+  },
+
+  // ── Step 5b: Preferred glove size ────────────────────────────────────────
+  // Optional — players who already know their preferred size can lock it in.
+  // "Choose for me" is the first option and preserves current algorithm
+  // behavior exactly. Catchers are excluded: their sizing is circumference.
+  {
+    id: "preferredSizeInches",
+    step: 5,
+    label: "Do you have a preferred glove size?",
+    description:
+      "Optional — we'll pick the best size for your position by default.",
+    type: "single_select",
+    // Static fallback (the dynamic resolver handles the real list).
+    options: [
+      {
+        label: "Choose for me",
+        value: "any",
+        hint: "We'll match the best size for your position and playing style.",
+      },
+    ],
+    getOptions: buildSizeOptions,
+    showIf: (a) =>
+      !!a.sport && !!a.primaryPosition && a.primaryPosition !== "catcher",
   },
 
   // ── Step 6: Experience level ─────────────────────────────────────────────
@@ -281,21 +374,7 @@ export const QUIZ_QUESTIONS: QuizQuestion[] = [
       a.primaryPosition !== "catcher" && a.primaryPosition !== "first_base",
   },
 
-  // ── Step 12: Fast close (Infield / Utility only) ─────────────────────────
-  // The original showIf allowed every non-mitt primary position. We narrow
-  // it here so outfield, pitcher, etc. don't see a question that doesn't
-  // apply to their craft.
-  {
-    id: "wantsFastClose",
-    step: 12,
-    label: "Do you want a glove that closes fast?",
-    description: "Great for infielders and quick-transfer players.",
-    type: "boolean",
-    showIf: (a) =>
-      a.primaryPosition === "infield" || a.primaryPosition === "utility",
-  },
-
-  // ── Step 13: Preferred brands (moved up from final step) ─────────────────
+  // ── Step 12: Preferred brands ─────────────────────────────────────────────
   // Brand is still a soft signal, but asking earlier lets the Kip It Real
   // fork close out the flow without a trailing brand picker.
   {
@@ -316,16 +395,6 @@ export const QUIZ_QUESTIONS: QuizQuestion[] = [
     ],
   },
 
-  // ── Step 14: Versatility (Slowpitch + Utility only) ──────────────────────
-  {
-    id: "wantsVersatility",
-    step: 14,
-    label: "Should it play well across multiple positions?",
-    type: "boolean",
-    showIf: (a) =>
-      a.sport === "slowpitch" || a.primaryPosition === "utility",
-  },
-
   // ── Step 15: Fastpitch fit importance (Fastpitch only) ───────────────────
   {
     id: "fastpitchFitImportant",
@@ -337,10 +406,24 @@ export const QUIZ_QUESTIONS: QuizQuestion[] = [
     showIf: (a) => a.sport === "fastpitch",
   },
 
-  // ── Step 16: Kip it Real? (premium-leather fork, second-to-last) ─────────
+  // ── Step 15b: Baseball crossover (Fastpitch / Slowpitch only) ───────────
+  // Some baseball gloves work well for softball — larger sizes and certain
+  // patterns cross over cleanly. Players who say Yes allow the engine to
+  // surface baseball gloves marked crossoverViable with a small penalty.
+  {
+    id: "openToCrossoverGloves",
+    step: 16,
+    label: "Open to baseball gloves as an option?",
+    description:
+      "Some baseball gloves — especially outfield and utility patterns — work great for softball. Saying yes opens up more choices.",
+    type: "boolean",
+    showIf: (a) => a.sport === "fastpitch" || a.sport === "slowpitch",
+  },
+
+  // ── Step 17: Kip it Real? (premium-leather fork, second-to-last) ─────────
   {
     id: "wantsPremiumLeather",
-    step: 16,
+    step: 17,
     label: "Kip it Real?",
     description:
       "Prioritize premium leather for maximum longevity and feel.",
@@ -349,13 +432,13 @@ export const QUIZ_QUESTIONS: QuizQuestion[] = [
     type: "boolean",
   },
 
-  // ── Step 17: Budget range (skipped when Kip it Real = Yes) ───────────────
+  // ── Step 18: Budget range (skipped when Kip it Real = Yes) ──────────────
   // When the user takes the premium path we set budgetSkipped = true in the
   // quiz container and jump straight to results; this showIf is the
   // deterministic gate that enforces it.
   {
     id: "budgetMax",
-    step: 17,
+    step: 18,
     label: "What is your budget ceiling?",
     description: "We'll respect this as a soft cap and flag nearby options.",
     type: "range",

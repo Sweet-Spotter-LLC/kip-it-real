@@ -8,6 +8,7 @@ import {
   matchesBrowseFilters,
   sortBrowseGloves,
   uniqueBrands,
+  uniqueSeries,
   priceBounds,
   type BrowseFilters,
   type BrowseSort,
@@ -26,11 +27,13 @@ interface BrowseClientProps {
 export function BrowseClient({ gloves }: BrowseClientProps) {
   const [bounds] = useState<[number, number]>(() => priceBounds(gloves));
   const brands = useMemo(() => uniqueBrands(gloves), [gloves]);
+  const series = useMemo(() => uniqueSeries(gloves), [gloves]);
 
   const [filters, setFilters] = useState<BrowseFilters>({
     sport: "all",
     position: "all",
     brand: "all",
+    series: "all",
     minPrice: bounds[0],
     maxPrice: bounds[1],
     query: "",
@@ -51,6 +54,7 @@ export function BrowseClient({ gloves }: BrowseClientProps) {
       sport: "all",
       position: "all",
       brand: "all",
+      series: "all",
       minPrice: bounds[0],
       maxPrice: bounds[1],
       query: "",
@@ -134,6 +138,26 @@ export function BrowseClient({ gloves }: BrowseClientProps) {
             </select>
           </div>
 
+          {/* Series */}
+          {series.length > 0 && (
+            <div className="md:col-span-2">
+              <Label htmlFor="browse-series">Series</Label>
+              <select
+                id="browse-series"
+                value={filters.series}
+                onChange={(e) => patch("series", e.target.value)}
+                className="mt-1 w-full rounded-xl border border-brand-bg-deep bg-white/70 px-3 py-2 text-sm"
+              >
+                <option value="all">All series</option>
+                {series.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
           {/* Sort */}
           <div className="md:col-span-2">
             <Label htmlFor="browse-sort">Sort</Label>
@@ -180,7 +204,7 @@ export function BrowseClient({ gloves }: BrowseClientProps) {
           </div>
 
           {/* Reset */}
-          <div className="md:col-span-6 flex items-end">
+          <div className="md:col-span-4 flex items-end">
             <button
               type="button"
               onClick={reset}
@@ -227,6 +251,12 @@ export function BrowseClient({ gloves }: BrowseClientProps) {
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
+
+const STRONG_VALUE_TIERS = new Set(["strong value", "best value"]);
+
+function isStrongValueTier(tier: string): boolean {
+  return STRONG_VALUE_TIERS.has(tier.toLowerCase());
+}
 
 function numberOrUndef(v: string): number | undefined {
   if (v === "") return undefined;
@@ -293,6 +323,9 @@ function BrowseCard({ glove }: { glove: GloveProduct }) {
           <span className="chip-accent text-[11px]">In production</span>
         ) : (
           <span className="chip text-[11px] opacity-70">Discontinued</span>
+        )}
+        {glove.valueTier && isStrongValueTier(glove.valueTier) && (
+          <span className="chip-accent text-[11px]">Best Value</span>
         )}
         {glove.fastpitchFit && (
           <span className="chip text-[11px]">Fastpitch-specific</span>

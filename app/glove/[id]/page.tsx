@@ -6,6 +6,18 @@ import {
   SPORT_LABELS,
   WEB_TYPE_META,
 } from "@/lib/glove/constants";
+import {
+  leatherLabel,
+  breakInLabel,
+  fitLabel,
+  stiffnessLabel,
+  gameReadyLabel,
+  durabilityLabel,
+  catchSecurityLabel,
+  versatilityLabel,
+  pocketDepthLabel,
+  transferSpeedLabel,
+} from "@/lib/glove/qualitative";
 
 /**
  * Kip It Real — glove detail page.
@@ -20,11 +32,12 @@ import {
  *   · Back to results / retake quiz footer
  */
 interface DetailPageProps {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }
 
 export default async function GloveDetailPage({ params }: DetailPageProps) {
-  const glove = await loadGloveById(params.id);
+  const { id } = await params;
+  const glove = await loadGloveById(id);
   if (!glove) notFound();
 
   const webMeta = WEB_TYPE_META[glove.webType];
@@ -81,6 +94,9 @@ export default async function GloveDetailPage({ params }: DetailPageProps) {
               {glove.slowpitchFriendly && (
                 <span className="chip">Slowpitch ready</span>
               )}
+              {glove.valueTier && (
+                <span className="chip-accent">{glove.valueTier}</span>
+              )}
             </div>
           </div>
 
@@ -119,7 +135,93 @@ export default async function GloveDetailPage({ params }: DetailPageProps) {
           </section>
         )}
 
-        {/* ── Spec grid ───────────────────────────────────────────────── */}
+        {/* ── Scouting report ──────────────────────────────────────────── */}
+        <section className="mt-8">
+          <h2 className="section-heading">Scouting Report</h2>
+
+          {/* Feel & Construction */}
+          <div className="mt-6">
+            <p className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-brand-support">
+              Feel &amp; Construction
+            </p>
+            <div className="grid gap-4 md:grid-cols-2">
+              <RatingSpecCell
+                label="Leather"
+                value={leatherLabel(glove.leatherQuality)}
+                rating={glove.leatherQuality}
+                max={5}
+              />
+              <RatingSpecCell
+                label="Break-in"
+                value={breakInLabel(glove.breakInTime)}
+                rating={glove.breakInTime}
+                max={5}
+              />
+              <RatingSpecCell
+                label="Stiffness"
+                value={stiffnessLabel(glove.stiffness)}
+                rating={glove.stiffness}
+                max={5}
+              />
+              <RatingSpecCell
+                label="Game ready"
+                value={gameReadyLabel(glove.gameReadyLevel)}
+                rating={glove.gameReadyLevel}
+                max={5}
+              />
+            </div>
+          </div>
+
+          {/* Fit */}
+          <div className="mt-6">
+            <p className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-brand-support">
+              Fit
+            </p>
+            <div className="grid gap-4 md:grid-cols-2">
+              <SpecCell
+                label="Pocket depth"
+                value={pocketDepthLabel(glove.pocketDepth)}
+              />
+              <SpecCell
+                label="Hand opening"
+                value={fitLabel(glove.fitProfile)}
+              />
+              <SpecCell
+                label="Transfer bias"
+                value={transferSpeedLabel(glove.transferSpeedBias)}
+              />
+              <RatingSpecCell
+                label="Catch security"
+                value={catchSecurityLabel(glove.catchSecurity)}
+                rating={glove.catchSecurity}
+                max={5}
+              />
+            </div>
+          </div>
+
+          {/* Performance */}
+          <div className="mt-6">
+            <p className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-brand-support">
+              Performance
+            </p>
+            <div className="grid gap-4 md:grid-cols-2">
+              <RatingSpecCell
+                label="Durability"
+                value={durabilityLabel(glove.durabilityScore)}
+                rating={glove.durabilityScore}
+                max={5}
+              />
+              <RatingSpecCell
+                label="Versatility"
+                value={versatilityLabel(glove.versatilityScore)}
+                rating={glove.versatilityScore}
+                max={5}
+              />
+            </div>
+          </div>
+        </section>
+
+        {/* ── Specifications ────────────────────────────────────────────── */}
         <section className="mt-8">
           <h2 className="section-heading">Specifications</h2>
           <div className="mt-6 grid gap-4 md:grid-cols-2">
@@ -145,53 +247,10 @@ export default async function GloveDetailPage({ params }: DetailPageProps) {
               label="Throw-hand availability"
               value={glove.throwHandAvailability.join(" · ")}
             />
-            <SpecCell
-              label="Leather quality"
-              value={`${glove.leatherQuality}/5`}
-              sub={leatherTierLabel(glove.leatherQuality)}
-            />
-            <SpecCell
-              label="Break-in time"
-              value={`${glove.breakInTime}/5`}
-              sub={breakInLabel(glove.breakInTime)}
-            />
-            <SpecCell
-              label="Stiffness"
-              value={`${glove.stiffness}/5`}
-              sub={stiffnessLabel(glove.stiffness)}
-            />
-            <SpecCell
-              label="Game-ready level"
-              value={`${glove.gameReadyLevel}/5`}
-            />
-            <SpecCell
-              label="Durability"
-              value={`${glove.durabilityScore}/5`}
-            />
-            <SpecCell
-              label="Pocket depth"
-              value={depthLabel(glove.pocketDepth)}
-              sub={`Raw value: ${formatSigned(glove.pocketDepth)}`}
-            />
-            <SpecCell
-              label="Fit profile"
-              value={fitLabel(glove.fitProfile)}
-              sub={`Raw value: ${formatSigned(glove.fitProfile)}`}
-            />
-            <SpecCell
-              label="Transfer speed bias"
-              value={transferLabel(glove.transferSpeedBias)}
-              sub={`Raw value: ${formatSigned(glove.transferSpeedBias)}`}
-            />
-            <SpecCell
-              label="Catch security"
-              value={`${glove.catchSecurity}/5`}
-            />
-            <SpecCell
-              label="Versatility"
-              value={`${glove.versatilityScore}/5`}
-            />
             <SpecCell label="Model year" value={`${glove.year}`} />
+            {glove.series && (
+              <SpecCell label="Series" value={glove.series} />
+            )}
             {glove.lastVerified && (
               <SpecCell label="Last verified" value={glove.lastVerified} />
             )}
@@ -269,52 +328,48 @@ function SpecCell({
   );
 }
 
-// ─── Label helpers ───────────────────────────────────────────────────────────
+// ─── RatingSpecCell ──────────────────────────────────────────────────────────
+
+/**
+ * Like SpecCell but with a compact segmented rating bar for 0–5 scale attrs.
+ * The bar gives an immediate visual read without showing a raw number.
+ */
+function RatingSpecCell({
+  label,
+  value,
+  rating,
+  max = 5,
+}: {
+  label: string;
+  value: string;
+  rating: number;
+  max?: number;
+}) {
+  const filled = Math.max(0, Math.min(Math.round(rating), max));
+  return (
+    <div className="rounded-2xl border border-brand-bg-deep bg-white/60 p-5">
+      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-support">
+        {label}
+      </p>
+      <p className="mt-2 font-display text-lg font-bold text-brand-primary">
+        {value}
+      </p>
+      <div className="mt-3 flex gap-1.5" aria-hidden="true">
+        {Array.from({ length: max }, (_, i) => (
+          <span
+            key={i}
+            className={`h-1.5 flex-1 rounded-full ${
+              i < filled ? "bg-brand-primary" : "bg-brand-bg-deep"
+            }`}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── Label helper ────────────────────────────────────────────────────────────
 
 function capitalize(s: string) {
   return s.charAt(0).toUpperCase() + s.slice(1);
-}
-function formatSigned(n: number) {
-  return n > 0 ? `+${n}` : `${n}`;
-}
-function depthLabel(n: number) {
-  if (n >= 2) return "Very deep";
-  if (n >= 1) return "Deep";
-  if (n >= -0.5) return "Medium";
-  if (n >= -1.5) return "Shallow";
-  return "Very shallow";
-}
-function fitLabel(n: number) {
-  if (n >= 1.5) return "Roomy";
-  if (n >= 0.5) return "Slightly roomy";
-  if (n >= -0.5) return "Balanced";
-  if (n >= -1.5) return "Snug";
-  return "Very snug";
-}
-function transferLabel(n: number) {
-  if (n >= 2) return "Quick transfer";
-  if (n >= 0.5) return "Leans quick";
-  if (n >= -0.5) return "Balanced";
-  return "Deep / catch security";
-}
-function leatherTierLabel(n: number) {
-  if (n >= 5) return "Top-tier full-grain";
-  if (n >= 4) return "Premium leather";
-  if (n >= 3) return "Mid-range leather";
-  if (n >= 2) return "Entry-level leather";
-  return "Synthetic or low-grade";
-}
-function breakInLabel(n: number) {
-  if (n >= 4) return "Extended conditioning required";
-  if (n >= 3) return "Noticeable break-in period";
-  if (n >= 2) return "Moderate break-in";
-  if (n >= 1) return "Short break-in";
-  return "Game-ready";
-}
-function stiffnessLabel(n: number) {
-  if (n >= 4) return "Raw, premium-stiff";
-  if (n >= 3) return "Firm";
-  if (n >= 2) return "Moderate";
-  if (n >= 1) return "Soft";
-  return "Already broken in";
 }

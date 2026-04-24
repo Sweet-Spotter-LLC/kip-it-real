@@ -82,6 +82,107 @@ export function fitLabel(fitProfile: number): string {
   return FIT_LABELS[4]; // Wide
 }
 
+// ─── Stiffness ───────────────────────────────────────────────────────────────
+
+const STIFFNESS_LABELS = [
+  "Already Broken In", // 0
+  "Soft",              // 1
+  "Moderate",          // 2
+  "Firm",              // 3
+  "Stiff",             // 4
+  "Very Stiff",        // 5
+] as const;
+
+export function stiffnessLabel(stiffness: number): string {
+  const idx = clamp(Math.round(stiffness), 0, 5);
+  return STIFFNESS_LABELS[idx];
+}
+
+// ─── Game-ready level ─────────────────────────────────────────────────────────
+
+const GAME_READY_LABELS = [
+  "Full Break-In Needed", // 0
+  "Long Break-In",        // 1
+  "Moderate Break-In",    // 2
+  "Some Break-In",        // 3
+  "Near Ready",           // 4
+  "Game Ready",           // 5
+] as const;
+
+export function gameReadyLabel(gameReadyLevel: number): string {
+  const idx = clamp(Math.round(gameReadyLevel), 0, 5);
+  return GAME_READY_LABELS[idx];
+}
+
+// ─── Durability ───────────────────────────────────────────────────────────────
+
+const DURABILITY_LABELS = [
+  "Light-Duty",    // 0
+  "Light",         // 1
+  "Moderate",      // 2
+  "Good",          // 3
+  "Very Good",     // 4
+  "Built to Last", // 5
+] as const;
+
+export function durabilityLabel(durabilityScore: number): string {
+  const idx = clamp(Math.round(durabilityScore), 0, 5);
+  return DURABILITY_LABELS[idx];
+}
+
+// ─── Catch security ──────────────────────────────────────────────────────────
+
+const CATCH_SECURITY_LABELS = [
+  "Minimal",   // 0
+  "Light",     // 1
+  "Moderate",  // 2
+  "Standard",  // 3
+  "Secure",    // 4
+  "Maximum",   // 5
+] as const;
+
+export function catchSecurityLabel(catchSecurity: number): string {
+  const idx = clamp(Math.round(catchSecurity), 0, 5);
+  return CATCH_SECURITY_LABELS[idx];
+}
+
+// ─── Versatility ─────────────────────────────────────────────────────────────
+
+const VERSATILITY_LABELS = [
+  "Highly Specialised", // 0
+  "Single-Position",    // 1
+  "Position-Specific",  // 2
+  "Flexible",           // 3
+  "Multi-Position",     // 4
+  "All-Field",          // 5
+] as const;
+
+export function versatilityLabel(versatilityScore: number): string {
+  const idx = clamp(Math.round(versatilityScore), 0, 5);
+  return VERSATILITY_LABELS[idx];
+}
+
+// ─── Pocket depth (signed -2..+3) ────────────────────────────────────────────
+
+export function pocketDepthLabel(pocketDepth: number): string {
+  if (pocketDepth >= 2.5) return "Very Deep";
+  if (pocketDepth >= 1.5) return "Deep";
+  if (pocketDepth >= 0.5) return "Medium-Deep";
+  if (pocketDepth >= -0.5) return "Medium";
+  if (pocketDepth >= -1.5) return "Shallow";
+  return "Very Shallow";
+}
+
+// ─── Transfer speed bias (signed -2..+3) ─────────────────────────────────────
+
+export function transferSpeedLabel(transferSpeedBias: number): string {
+  if (transferSpeedBias >= 2) return "Quick Transfer";
+  if (transferSpeedBias >= 0.5) return "Transfer-Biased";
+  if (transferSpeedBias >= -0.5) return "Balanced";
+  if (transferSpeedBias >= -1.5) return "Security-Biased";
+  return "Maximum Catch Security";
+}
+
 /**
  * Convenience bundle for rendering a glove's three qualitative dimensions
  * in one call — used by result cards and detail views.

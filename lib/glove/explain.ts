@@ -2,7 +2,7 @@
  * Kip It Real — deterministic explanation generator.
  *
  * Rules:
- *  - Every result gets 3–5 reasons, 1–3 tradeoffs, 1–2 avoidIf statements.
+ *  - Every result gets 3–5 reasons and 1–4 tradeoffs.
  *  - Language is specific and data-driven (no "no major issues" filler).
  *  - Each generator only fires if the condition it describes actually applies.
  *  - Generators are prioritised by impact score descending so the most
@@ -19,11 +19,17 @@ import {
   SPORT_LABELS,
   WEB_TYPE_META,
 } from "./constants";
+import {
+  leatherLabel,
+  stiffnessLabel,
+  durabilityLabel,
+  versatilityLabel,
+  transferSpeedLabel,
+} from "./qualitative";
 
 interface Explanation {
   reasons: string[];
   tradeoffs: string[];
-  avoidIf: string[];
 }
 
 // ─── Context helper ───────────────────────────────────────────────────────────
@@ -71,7 +77,7 @@ function breakInPrefFromProfile(p: UserProfile): BreakInPrefLabel {
 }
 
 // ─── Budget-gap helpers ───────────────────────────────────────────────────────
-// The tradeoff + avoidIf copy adapts based on how far over budget the glove is,
+// The tradeoff copy adapts based on how far over budget the glove is,
 // and how often the player uses it. This lets us say something concrete
 // ("end-of-season sale closes that gap") instead of a generic "it costs more."
 
@@ -103,7 +109,7 @@ function dollarGap(p: UserProfile, g: GloveProduct): string {
 // ─── Reason generators ────────────────────────────────────────────────────────
 
 interface Generator {
-  type: "reason" | "tradeoff" | "avoidIf";
+  type: "reason" | "tradeoff";
   condition: (p: UserProfile, g: GloveProduct, b: ScoreBreakdownItem[]) => boolean;
   text: (p: UserProfile, g: GloveProduct, b: ScoreBreakdownItem[]) => string;
   /** Higher priority = closer to the top of the list. */
@@ -148,10 +154,10 @@ const GENERATORS: Generator[] = [
     text: (p, g) => {
       const pref = breakInPrefFromProfile(p);
       return pref === "game_ready"
-        ? `Stiffness rating of ${g.stiffness}/5 means this one breaks in fast — close to game-ready right out of the box.`
+        ? `${stiffnessLabel(g.stiffness)} leather means this one breaks in fast — close to game-ready right out of the box.`
         : pref === "premium_stiff"
-        ? `Stiffness rating of ${g.stiffness}/5 aligns with your preference for a premium leather break-in experience.`
-        : `Moderate stiffness (${g.stiffness}/5) means a reasonable break-in period — not too soft, not a project.`;
+        ? `${stiffnessLabel(g.stiffness)} leather aligns with your preference for a proper premium break-in experience.`
+        : `${stiffnessLabel(g.stiffness)} leather means a reasonable break-in period — not too soft, not a project.`;
     },
   },
   {
@@ -173,7 +179,7 @@ const GENERATORS: Generator[] = [
     condition: (p, g, b) =>
       sub(b, "leatherQualityFit") >= 0.85 && p.wantsPremiumLeather,
     text: (p, g) =>
-      `Leather quality scores ${g.leatherQuality}/5 — top-tier hide that holds its shape and develops a great feel over time.`,
+      `${leatherLabel(g.leatherQuality)} leather — top-tier hide that holds its shape and develops a great feel over time.`,
   },
   {
     type: "reason",
@@ -211,12 +217,22 @@ const GENERATORS: Generator[] = [
     condition: (p, g, b) =>
       sub(b, "versatilityFit") >= 0.85 && p.wantsVersatility,
     text: (p, g) =>
-      `Versatility score of ${g.versatilityScore}/5 means it can travel across positions — works for your multi-spot role.`,
+      `${versatilityLabel(g.versatilityScore)} — designed to travel across positions and work in your multi-spot role.`,
+  },
+  {
+    type: "reason",
+    priority: 68,
+    condition: (p, g, b) =>
+      sub(b, "positionFit") >= 0.6 && sub(b, "positionFit") < 0.8,
+    text: (p, g) =>
+      `Tagged as a utility glove — versatile enough to cover ${posLabel(p.primaryPosition)} and the other spots you rotate through.`,
   },
   {
     type: "reason",
     priority: 72,
-    condition: (p, g, b) => sub(b, "budgetFit") === 1.0,
+    // Suppress for premium-leather users — their budgetMax is a $10 000 sentinel,
+    // so this would fire for every real glove and produce nonsense ceiling copy.
+    condition: (p, g, b) => sub(b, "budgetFit") === 1.0 && !p.wantsPremiumLeather,
     text: (p, g) =>
       `At $${g.price}, it fits comfortably within your $${p.budgetMax} ceiling — no compromise required.`,
   },
@@ -246,7 +262,7 @@ const GENERATORS: Generator[] = [
     condition: (p, g) =>
       g.stiffness >= 4 && breakInPrefFromProfile(p) === "game_ready",
     text: (p, g) =>
-      `Stiffness of ${g.stiffness}/5 will need real work before game use — conditioning oil and catch drills required.`,
+      `${stiffnessLabel(g.stiffness)} leather will need real work before game use — conditioning oil and catch drills required.`,
   },
   // Price gap — three tiers, only one fires at a time thanks to budgetGap().
 
@@ -343,129 +359,28 @@ const GENERATORS: Generator[] = [
   },
   {
     type: "tradeoff",
+    priority: 74,
+    condition: (p, g) =>
+      g.leatherQuality >= 5 && p.playFrequency === "casual",
+    text: () =>
+      `Elite leather rewards regular use — for casual play, the break-in investment and price premium may not fully pay off versus a solid mid-grade glove.`,
+  },
+  {
+    type: "tradeoff",
+    priority: 71,
+    condition: (p, g) =>
+      g.stiffness >= 4 &&
+      (p.playFrequency === "casual" || p.experienceLevel === "beginner"),
+    text: (p, g) =>
+      `${stiffnessLabel(g.stiffness)} leather needs consistent work to open up — casual players or beginners may prefer something softer that's closer to game-ready.`,
+  },
+  {
+    type: "tradeoff",
     priority: 70,
     condition: (p, g) =>
       !g.fastpitchFit && p.sport === "fastpitch" && p.fastpitchFitImportant,
     text: () =>
       `Not designed specifically for fastpitch — wrist and stall geometry may not match the fit you were hoping for.`,
-  },
-
-  // ── Avoid if ─────────────────────────────────────────────────────────────────
-
-  // Budget-strict: meaningfully over budget AND the player said they're casual
-  // — the ROI on the extra spend just isn't there.
-  {
-    type: "avoidIf",
-    priority: 105,
-    condition: (p, g) =>
-      budgetGap(p, g) === "large" && p.playFrequency === "casual",
-    text: (p, g) =>
-      `Avoid this if $${p.budgetMax} is a hard ceiling — this runs ${dollarGap(p, g)} above it, and at casual play frequency you'll get most of the value from a glove a tier below.`,
-  },
-  {
-    type: "avoidIf",
-    priority: 103,
-    condition: (p, g) =>
-      budgetGap(p, g) !== "inside" &&
-      budgetGap(p, g) !== "small" &&
-      p.playFrequency !== "casual",
-    text: (p, g) =>
-      `Avoid this if your budget is firm — it's ${dollarGap(p, g)} over and the matching glove one tier down will do the same job for less.`,
-  },
-
-  // Quality mismatch: premium leather + casual play = over-spec purchase.
-  {
-    type: "avoidIf",
-    priority: 102,
-    condition: (p, g) =>
-      g.leatherQuality >= 5 && p.playFrequency === "casual",
-    text: () =>
-      `Avoid this if you're playing casually — pro-grade leather is built for daily tournament use and will feel like overkill for monthly pickup games.`,
-  },
-
-  // Break-in investment mismatch: stiff glove + casual player who doesn't
-  // want to commit 4–6 weeks of conditioning.
-  {
-    type: "avoidIf",
-    priority: 101,
-    condition: (p, g) =>
-      g.stiffness >= 4 && p.playFrequency === "casual",
-    text: () =>
-      `Avoid this if you don't want to spend 4–6 weeks breaking in a glove — that investment pays off for players on the field often, less so for weekend use.`,
-  },
-
-  {
-    type: "avoidIf",
-    priority: 100,
-    condition: (p, g) =>
-      g.stiffness >= 4 && p.experienceLevel === "beginner",
-    text: () =>
-      `Avoid this if you're newer to the game and want something ready to use soon — breaking in stiff leather takes real time, catch drills, and conditioning.`,
-  },
-  {
-    type: "avoidIf",
-    priority: 95,
-    condition: (p, g) =>
-      g.pocketDepth > 1.5 && pocketPrefFromProfile(p) === "shallow",
-    text: () =>
-      `Avoid this if you want a shallow infield-style pocket — this glove runs deeper than your preference.`,
-  },
-  {
-    type: "avoidIf",
-    priority: 93,
-    condition: (p, g) =>
-      g.pocketDepth < -0.5 && pocketPrefFromProfile(p) === "deep",
-    text: () =>
-      `Avoid this if you want deep catch security — the pocket is shallower than what you described.`,
-  },
-  {
-    type: "avoidIf",
-    priority: 90,
-    condition: (p, g) =>
-      breakInPrefFromProfile(p) === "game_ready" && g.stiffness >= 3,
-    text: () =>
-      `Avoid this if you need it game-ready right away — the leather will need a real break-in commitment.`,
-  },
-  {
-    type: "avoidIf",
-    priority: 88,
-    condition: (p, g) =>
-      p.ageGroup === "youth" && !g.youthFriendly,
-    text: () =>
-      `Avoid this if the player has smaller hands — the stall and shell are built for adult-sized hands.`,
-  },
-  {
-    type: "avoidIf",
-    priority: 85,
-    condition: (p, g) =>
-      p.sport === "fastpitch" && p.fastpitchFitImportant && !g.fastpitchFit,
-    text: () =>
-      `Avoid this if fastpitch-specific hand opening is a priority — the wrist geometry is not fastpitch-optimised.`,
-  },
-  {
-    type: "avoidIf",
-    priority: 80,
-    condition: (p, g) =>
-      p.wantsVersatility && g.versatilityScore <= 1,
-    text: () =>
-      `Avoid this if you move around the field — it is designed for one specific spot.`,
-  },
-  {
-    type: "avoidIf",
-    priority: 78,
-    condition: (p, g) =>
-      p.wantsFastClose && g.easyClose < 0,
-    text: () =>
-      `Avoid this if you need a fast close — the shell resistance is high and it won't snap shut quickly.`,
-  },
-  {
-    type: "avoidIf",
-    priority: 75,
-    condition: (p, g) =>
-      p.secondaryPosition !== undefined &&
-      !g.positionTags.includes(p.secondaryPosition!),
-    text: (p, g) =>
-      `Avoid this if ${posLabel(p.secondaryPosition!)} is a regular spot for you — it is not tagged for that position.`,
   },
 ];
 
@@ -474,7 +389,7 @@ const GENERATORS: Generator[] = [
 /**
  * Generates explanation text for a single scored glove.
  *
- * Returns 3–5 reasons, 1–3 tradeoffs, and 1–2 avoidIf statements.
+ * Returns 3–5 reasons and 1–4 tradeoffs.
  * Each list is sorted by priority descending then trimmed to limits.
  */
 export function generateExplanation(
@@ -484,7 +399,6 @@ export function generateExplanation(
 ): Explanation {
   const reasons: string[] = [];
   const tradeoffs: string[] = [];
-  const avoidIf: string[] = [];
 
   // Run all generators, collect fired ones sorted by priority descending.
   const fired = GENERATORS.filter((g) =>
@@ -494,8 +408,7 @@ export function generateExplanation(
   for (const gen of fired) {
     const text = gen.text(profile, glove, breakdown);
     if (gen.type === "reason" && reasons.length < 5) reasons.push(text);
-    if (gen.type === "tradeoff" && tradeoffs.length < 3) tradeoffs.push(text);
-    if (gen.type === "avoidIf" && avoidIf.length < 2) avoidIf.push(text);
+    if (gen.type === "tradeoff" && tradeoffs.length < 4) tradeoffs.push(text);
   }
 
   // ── Fallbacks (these fire ONLY if the category is still empty) ────────────
@@ -507,39 +420,44 @@ export function generateExplanation(
     );
     if (reasons.length < 3) {
       reasons.push(
-        `Leather quality of ${glove.leatherQuality}/5 and durability of ${glove.durabilityScore}/5 make this a solid long-term option.`,
+        `${leatherLabel(glove.leatherQuality)} leather and ${durabilityLabel(glove.durabilityScore).toLowerCase()} durability make this a solid long-term option.`,
       );
     }
     if (reasons.length < 3) {
-      reasons.push(
-        `At $${glove.price}, the price reflects a ${
-          glove.leatherQuality >= 4
-            ? "premium"
-            : glove.leatherQuality === 3
-            ? "mid-range"
-            : "entry-level"
-        } leather tier.`,
-      );
+      if (profile.wantsPremiumLeather) {
+        reasons.push(
+          `${leatherLabel(glove.leatherQuality)} leather puts this in the ${
+            glove.leatherQuality >= 5
+              ? "top-tier full-grain"
+              : glove.leatherQuality >= 4
+              ? "premium leather"
+              : "solid mid-range leather"
+          } category — built to mold to your hand and improve with use.`,
+        );
+      } else {
+        reasons.push(
+          `At $${glove.price}, the price reflects a ${
+            glove.leatherQuality >= 4
+              ? "premium"
+              : glove.leatherQuality === 3
+              ? "mid-range"
+              : "entry-level"
+          } leather tier.`,
+        );
+      }
     }
   }
 
   if (tradeoffs.length === 0) {
-    tradeoffs.push(
-      `Transfer speed bias of ${glove.transferSpeedBias > 0 ? "+" : ""}${glove.transferSpeedBias} means ${
-        glove.transferSpeedBias > 1
-          ? "quick transfer at the cost of some catch depth"
-          : glove.transferSpeedBias < -0.5
-          ? "deep catch security at the cost of transfer quickness"
-          : "a balanced approach — neither a speed nor security specialist"
-      }.`,
-    );
+    const tsLabel = transferSpeedLabel(glove.transferSpeedBias);
+    const tsMeaning =
+      glove.transferSpeedBias > 1
+        ? "built for quick release at the cost of some catch depth"
+        : glove.transferSpeedBias < -0.5
+        ? "prioritizes deep catch security over transfer speed"
+        : "balanced approach — neither a speed nor a security specialist";
+    tradeoffs.push(`${tsLabel}: ${tsMeaning}.`);
   }
 
-  if (avoidIf.length === 0) {
-    avoidIf.push(
-      `Avoid this if your priorities shifted since answering the quiz — run through it again to get a fresh match.`,
-    );
-  }
-
-  return { reasons, tradeoffs, avoidIf };
+  return { reasons, tradeoffs };
 }

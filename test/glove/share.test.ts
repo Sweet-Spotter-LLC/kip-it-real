@@ -25,7 +25,6 @@ function match(
     score,
     reasons: [reason],
     tradeoffs: [],
-    avoidIf: [],
     breakdown: [],
   };
 }
