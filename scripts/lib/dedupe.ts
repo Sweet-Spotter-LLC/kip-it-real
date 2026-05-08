@@ -16,7 +16,7 @@
  * Pure functions only — this file is unit-testable in isolation.
  */
 
-import type { SheetRow } from "./sheets-client";
+import type { CatalogRow } from "./sheets-client";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -143,14 +143,14 @@ export function modelFromName(name: string | undefined): string | undefined {
   return undefined;
 }
 
-export function buildCatalogIndex(rows: SheetRow[]): CatalogIndex {
+export function buildCatalogIndex(rows: CatalogRow[]): CatalogIndex {
   const productIds = new Set<string>();
   const skus = new Set<string>();
   const brandModelPairs = new Set<string>();
   const brands = new Set<string>();
 
   for (const r of rows) {
-    const links = jbgUrlsInCell(r.data.purchaseLinks);
+    const links = jbgUrlsInCell(r.purchaseLinks);
     for (const url of links) {
       const id = extractProductId(url);
       if (id) productIds.add(id);
@@ -158,9 +158,9 @@ export function buildCatalogIndex(rows: SheetRow[]): CatalogIndex {
       const sku = normaliseSku(slug);
       if (sku) skus.add(sku);
     }
-    const brand = (r.data.brand ?? "").trim().toLowerCase();
+    const brand = (r.brand ?? "").trim().toLowerCase();
     if (brand) brands.add(brand);
-    const model = modelFromCatalogId(r.data.id) ?? modelFromName(r.data.name);
+    const model = modelFromCatalogId(r.id) ?? modelFromName(r.name);
     if (brand && model) brandModelPairs.add(`${brand}|${model}`);
   }
 
